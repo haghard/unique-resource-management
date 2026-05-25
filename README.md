@@ -59,8 +59,7 @@ Client1 `Update(user=2, from=x, to=y)` <> Client2 `Update(user=2, from=x, to=z)`
 
 ✅ Clients are able to order their own operations and provide a globally unique ID (`user_id`).
 
-It's a relative order invariant. Resource acquisition requires `precondition check`.  Releasing resource doesn't require any checks and cannot fail.
-Causal ordering if enough to guarantee that we never violate.
+It's a relative order invariant. Resource acquisition requires a `precondition check`.  Releasing resource doesn't require any checks and cannot fail. Causal ordering if enough to guarantee that we never violate anything here.
 
 
 # How to run 
@@ -177,7 +176,7 @@ grpcurl -d '{"resource":{"name":"b","version":1},"userId":"211367c3-9ad3-47ef-a6
 
 ```
 
-### Other
+### Other examples
 
 ```
 grpcurl -d '{"resource":{"name":"a1","version":2},"user_id":"211367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Assign
@@ -195,7 +194,9 @@ grpcurl -d '{"resource":{"name":"a","version":"a","city":"FL","state":"FL","coun
 
 ```
 
-
-
-
-
+Another similar domain and use cases:   
+   * Accounts with unique usernames
+   * users buying/exchanging available seats/tickets/parking lots
+   * library: users / books
+   * vehicles renting
+   * students and course subscriptions

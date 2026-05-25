@@ -9,6 +9,7 @@ import io.r2dbc.spi.*
 import org.slf4j.Logger
 import reactor.core.publisher.Mono
 
+import java.util.UUID
 import scala.concurrent.*
 import scala.jdk.FutureConverters.*
 import scala.util.control.NonFatal
@@ -30,21 +31,21 @@ final class R2dbcSessionProvider private (connectionFactory: ConnectionFactory, 
     // TODO: another ec
     implicit val ec: ExecutionContext = system.executionContext
     acquireCon().flatMap { con =>
-      // val trxId = UUID.randomUUID()
-      val f0 =
+      val trxId = UUID.randomUUID()
+      val f0    =
         for {
           _ <- toFuture(con.beginTransaction(PostgresTransactionDefinition.from(IsolationLevel.READ_COMMITTED)))
-          _ = log.info(s"R2dbcSession 1.Begin $desc")
+          _ = log.info(s"R2dbc 1.$trxId begin. $desc")
           result <- action(new R2dbcSession(con))
           _      <- toFuture(con.commitTransaction())
-          _ = log.info(s"R2dbcSession 2.Commit $desc")
+          _ = log.info(s"R2dbc 2.$trxId commit")
         } yield result
 
       f0
         .recoverWith { case NonFatal(ex) =>
           toFuture(con.rollbackTransaction())
             .recover { case NonFatal(_) =>
-              log.error(s"R2dbcSession 2.Rollback $desc", ex)
+              log.error(s"R2dbc 2.$trxId rollback", ex)
             }
             .flatMap(_ => Future.failed(ex))
         }

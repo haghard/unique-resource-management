@@ -50,7 +50,7 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-cluster-tools"           % AkkaVersion,
 
   "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
-  "com.github.jaceksokol" %% "akka-stream-map-async-partition" % "1.0.3",
+  //"com.github.jaceksokol" %% "akka-stream-map-async-partition" % "1.0.3",
 
   "com.typesafe.akka"             %% "akka-discovery"               % AkkaVersion,
   "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion,
