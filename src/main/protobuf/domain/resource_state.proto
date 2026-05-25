@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/any.proto";
+
+import "scalapb/scalapb.proto";
+
+option java_multiple_files = true;
+option java_package = "com.resource.domain";
+
+package com.resource.domain;
+
+message TakenResourceState {
+  map<string, int64> contentKeySeqNum = 1;
+  optional string user_id = 2;
+  //repeated string content = 1 [(scalapb.field).collection_type = "scala.collection.immutable.Set" ];
+}
+
+message Resource {
+  string name = 1;
+  int32 version = 2;
+
+  //other columns ...
+}
+
+message ResourceLocation {
+  int64 bucket_id = 1;
+  int64 seq_num = 2;
+}
+
+enum ResponseTag {
+  Unspecified = 0;
+  Assigned = 1;
+  Unassigned = 2;
+  Reassigned = 3;
+  ReservedByAnotherUser = 4;
+}

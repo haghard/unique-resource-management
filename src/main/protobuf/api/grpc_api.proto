@@ -1,0 +1,69 @@
+syntax = "proto3";
+
+import "google/protobuf/timestamp.proto";
+
+import "scalapb/scalapb.proto";
+import "domain/resource_state.proto";
+
+option java_multiple_files = true;
+option java_package = "com.resource.api";
+
+package com.resource.api;
+
+option (scalapb.options) = {
+  lenses: true,
+  preserve_unknown_fields: false,
+  retain_source_code_info: true,
+  no_primitive_wrappers: true,
+  no_default_values_in_constructor: true,
+  single_file: true,
+};
+
+service ResourceService {
+  rpc Assign(AssignResourceRequest) returns (ResourceReply) {}
+  rpc Release(ReleaseResourceRequest) returns (ResourceReply) {}
+  rpc Reassign(ReassignResourceRequest) returns (ResourceReply) {}
+  rpc GetResource(GetResourceRequest) returns (GetResourceReply) {}
+}
+
+message GetResourceRequest {
+  string user_id = 1;
+}
+
+message GetResourceReply {
+  com.resource.domain.ResourceLocation location = 1;
+  com.resource.domain.Resource resource = 2;
+}
+
+message AssignResourceRequest {
+  string user_id = 1;
+  com.resource.domain.Resource resource = 2 [(scalapb.field).no_box = true];
+}
+
+message ReleaseResourceRequest {
+  string user_id = 1;
+  com.resource.domain.ResourceLocation location = 2 [(scalapb.field).no_box = true];
+}
+
+message ReassignResourceRequest {
+  string user_id = 1;
+  com.resource.domain.Resource resource = 2 [(scalapb.field).no_box = true];
+  com.resource.domain.ResourceLocation location = 3 [(scalapb.field).no_box = true];
+}
+
+message ResourceReply {
+  string user_id = 1;
+  StatusCode status_code = 2;
+  com.resource.domain.ResourceLocation location = 3 [(scalapb.field).no_box = true];
+
+  enum StatusCode {
+    Undefined = 0;
+    OK = 1;
+    OKNoOp = 2;
+    ReservedByAnotherUser = 3;
+    AnotherResourceFound = 4;
+    LocationNotFound = 5;
+    UpdateFailure = 6;
+    Aborted = 7;  //cannot serialize access to ...
+  }
+}

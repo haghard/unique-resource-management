@@ -1,0 +1,55 @@
+syntax = "proto3";
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/any.proto";
+
+import "scalapb/scalapb.proto";
+import "domain/resource_state.proto";
+
+option java_multiple_files = true;
+option java_package = "com.resource.domain.resource";
+
+package com.resource.domain.resource;
+
+option (scalapb.options) = {
+  lenses: true,
+  preserve_unknown_fields: false,
+  no_default_values_in_constructor: false,
+  no_primitive_wrappers: true,
+  single_file: true,
+};
+
+message ResourceEvent {
+  oneof sealed_value {
+    Assigned assigned = 1;
+    Released released = 2;
+    Unassigned unassigned = 3;
+  }
+}
+
+message Assigned {
+  string user_id = 1;
+  Resource resource = 2 [(scalapb.field).no_box = true];
+  int64 seq_num = 3 [(scalapb.field).no_box = true];
+  ResourceLocation unassigned_location = 4;
+  int64 pending_cmd_seq_num = 5 [(scalapb.field).no_box = true];
+}
+
+message Released {
+  string user_id = 1;
+
+  ResourceLocation unassigned_location = 2 [(scalapb.field).no_box = true];
+
+  Resource assigned_resource = 3 [(scalapb.field).no_box = true];
+  ResourceLocation assigned_location = 4 [(scalapb.field).no_box = true];
+  int64 pending_cmd_seq_num = 5;
+}
+
+message Unassigned {
+  string user_id = 1;
+  ResourceLocation unassigned_location = 2 [(scalapb.field).no_box = true];
+  Resource unassigned_resource = 3 [(scalapb.field).no_box = true];
+  int64 pending_cmd_seq_num = 4;
+}
+

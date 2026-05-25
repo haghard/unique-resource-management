@@ -1,0 +1,68 @@
+syntax = "proto3";
+
+import "google/protobuf/wrappers.proto";
+import "google/protobuf/timestamp.proto";
+import "google/protobuf/any.proto";
+
+import "scalapb/scalapb.proto";
+import "domain/resource_state.proto";
+import "api/grpc_api.proto";
+
+option java_multiple_files = true;
+option java_package = "com.resource.domain.user";
+
+package com.resource.domain.user;
+
+option (scalapb.options) = {
+  lenses: true,
+  preserve_unknown_fields: false,
+  no_default_values_in_constructor: false,
+  no_primitive_wrappers: true,
+  single_file: true,
+};
+
+message UserCmd {
+  oneof sealed_value {
+      Assign assign = 1;
+      Release release = 2;
+      Reassign reassign = 3;
+      Confirm confirm = 4;
+      Passivate passivate = 5;
+      GetResource get_resource = 6;
+  }
+}
+
+message Assign {
+  string user_id = 1 [(scalapb.field).no_box = true];
+  com.resource.domain.Resource resource = 2 [(scalapb.field).no_box = true];
+  string replyTo = 3;
+}
+
+message Release {
+  string user_id = 1;
+  ResourceLocation location = 2 [(scalapb.field).no_box = true];
+  string replyTo = 3;
+}
+
+message Reassign {
+  string user_id = 1 [(scalapb.field).no_box = true];
+  com.resource.domain.Resource resource = 2 [(scalapb.field).no_box = true];
+  com.resource.domain.ResourceLocation location = 3 [(scalapb.field).no_box = true];
+  string replyTo = 4;
+}
+
+message Confirm {
+  string user_id = 1;
+  Resource resource = 2 [(scalapb.field).no_box = true];
+  ResourceLocation location = 3 [(scalapb.field).no_box = true];
+  ResponseTag response_tag = 4 [(scalapb.field).no_box = true];
+  int64 pending_cmd_seq_num = 5;
+  string projection = 6;
+}
+
+message Passivate {}
+
+message GetResource {
+  string user_id = 1;
+  string replyTo = 2;
+}
