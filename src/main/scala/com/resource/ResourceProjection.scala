@@ -87,7 +87,7 @@ object ResourceProjection {
                     .flatMap { _ =>
                       val resourceTable = tables.resourceTableByUserId(resourceTables, assigned.userId)
                       val desc          =
-                        s"Ev(${envelope.persistenceId} ${envelope.sequenceNr}) [${assigned.userId} / ${ResponseTag.Assigned} / ${assigned.resource.uniqueKey} / ${assigned.pendingCmdSeqNum}]"
+                        s"Ev(${envelope.persistenceId}:${envelope.sequenceNr}) [${assigned.userId} / ${ResponseTag.Assigned} / ${assigned.resource.uniqueKey} / ${assigned.pendingCmdSeqNum}]"
 
                       sessionProvider.exec(desc) { session =>
                         val stmt =
@@ -120,7 +120,7 @@ object ResourceProjection {
                 .flatMap { _ =>
                   val resourceTable = tables.resourceTableByUserId(resourceTables, unassigned.userId)
                   val desc          =
-                    s"Ev(${envelope.persistenceId} ${envelope.sequenceNr}) [${unassigned.userId} / ${ResponseTag.Unassigned} / ${unassigned.unassignedResource.uniqueKey} / ${unassigned.pendingCmdSeqNum}]"
+                    s"Ev(${envelope.persistenceId}:${envelope.sequenceNr}) [${unassigned.userId} / ${ResponseTag.Unassigned} / ${unassigned.unassignedResource.uniqueKey} / ${unassigned.pendingCmdSeqNum}]"
                   sessionProvider.exec(desc) { session =>
                     val stmt =
                       session
@@ -147,7 +147,7 @@ object ResourceProjection {
                 .flatMap { _ =>
                   val resourceTable = tables.resourceTableByUserId(resourceTables, reassignedReleased.userId)
                   val desc          =
-                    s"Ev(${envelope.persistenceId} ${envelope.sequenceNr}) [${reassignedReleased.userId} / ${ResponseTag.Reassigned} / ${reassignedReleased.assignedResource.uniqueKey} / ${reassignedReleased.pendingCmdSeqNum}]"
+                    s"Ev(${envelope.persistenceId}:${envelope.sequenceNr}) [${reassignedReleased.userId} / ${ResponseTag.Reassigned} / ${reassignedReleased.assignedResource.uniqueKey} / ${reassignedReleased.pendingCmdSeqNum}]"
                   sessionProvider.exec(desc) { session =>
                     val stmt =
                       session

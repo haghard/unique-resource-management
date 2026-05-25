@@ -25,9 +25,7 @@ message ResourceCmd {
     Assign assign = 1;
     Release release = 2;
     Reassign reassign = 3;
-
     Unassign unassign = 4;
-    //ReleaseAllocated release_allocated = 4;
     Passivate passivate = 5;
   }
 }
@@ -55,7 +53,7 @@ message Reassign {
   string replyTo = 5;
 }
 
-message Unassign /*ReleaseAllocated*/ {
+message Unassign {
   string user_id = 1;
   Resource resource = 2 [(scalapb.field).no_box = true];
   ResourceLocation assigned_location = 3 [(scalapb.field).no_box = true];

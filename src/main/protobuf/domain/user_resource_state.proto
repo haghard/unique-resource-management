@@ -8,6 +8,7 @@ import "scalapb/scalapb.proto";
 import "api/grpc_api.proto";
 import "domain/resource_state.proto";
 import "domain/user_resource_cmds.proto";
+import "domain/resource_cmds.proto";
 
 option java_multiple_files = true;
 option java_package = "com.resource.domain.user";
@@ -15,13 +16,13 @@ option java_package = "com.resource.domain.user";
 package com.resource.domain.user;
 
 message UserResourceState {
-  LockState lock_state = 1 ;
+  LockState lock_state = 1;
   LinkedResource linked_resource = 2;
 }
 
 message LockState {
-  UserCmd pending_user_cmd = 1 [(scalapb.field).no_box = true];
-  int64 pending_cmd_seq_num = 2;
+  com.resource.domain.resource.ResourceCmd pending_cmd = 1 [(scalapb.field).no_box = true];
+  string grpc_client = 2;
 }
 
 message LinkedResource {

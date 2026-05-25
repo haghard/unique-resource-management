@@ -11,8 +11,9 @@ import akka.persistence.typed.state.scaladsl.*
 import com.resource.Implicits.ResourceOps
 import com.resource.api.*
 import com.resource.domain.*
+import com.resource.domain.resource.ResourceCmdMessage
 import com.resource.domain.user.*
-import com.resource.domain.user.UserCmdMessage
+import org.slf4j.Logger
 
 import scala.concurrent.duration.*
 
@@ -38,10 +39,8 @@ object UserResourceLink {
               c.userId
             case c: Confirm =>
               c.userId
-            case com.resource.domain.user.Passivate() =>
-              throw new Exception(s"Unsupported Passivate()")
-            case UserCmd.Empty =>
-              throw new Exception("Empty ")
+            case com.resource.domain.user.Passivate() | RedeliveryTick() | UserCmd.Empty =>
+              throw new Exception(s"Unsupported cmd")
           }
 
         override def shardId(ownerId: String): String =
@@ -56,36 +55,54 @@ object UserResourceLink {
     uniqueResources: ActorRef[resource.ResourceCmd]
   ): Behavior[UserCmd] =
     Behaviors.setup { implicit ctx =>
-      val userId                                 = ctx.self.path.elements.last
-      implicit val refResolver: ActorRefResolver = ActorRefResolver(ctx.system)
+      Behaviors.withTimers { implicit timer =>
+        val userId                                 = ctx.self.path.elements.last
+        implicit val refResolver: ActorRefResolver = ActorRefResolver(ctx.system)
+        val redeliverAfter: FiniteDuration         = 6.seconds
 
-      DurableStateBehavior
-        .withEnforcedReplies[UserCmd, UserResourceState](
-          PersistenceId(TypeKey.name, entityCtx.entityId),
-          UserResourceState(),
-          (state, cmd) => state.applyCmd(userId, cmd, uniqueResources)
-        )
-        .receiveSignal {
-          case (state, RecoveryCompleted) =>
-            ctx.log.warn(s"★★★ RecoveryCompleted: ${state.pbState.lockState}")
-          case (_, RecoveryFailed(cause)) =>
-            ctx.log.error(s"There is a problem with state recovery $cause", cause)
-        }
-        .onPersistFailure(
-          SupervisorStrategy.restartWithBackoff(minBackoff = 3.seconds, maxBackoff = 10.seconds, randomFactor = 0.3)
-        )
+        DurableStateBehavior
+          .withEnforcedReplies[UserCmd, UserResourceState](
+            PersistenceId(TypeKey.name, entityCtx.entityId),
+            UserResourceState(),
+            (state, cmd) => state.applyCmd(userId, cmd, uniqueResources, redeliverAfter)
+          )
+          .receiveSignal {
+            case (state, RecoveryCompleted) =>
+              ctx.log.warn(s"★★★ RecoveryCompleted: ${state.pbState.lockState}")
+              state.redeliver(userId, uniqueResources, redeliverAfter)(timer, ctx.log)
+            case (_, RecoveryFailed(cause)) =>
+              ctx.log.error(s"There is a problem with state recovery $cause", cause)
+          }
+          .onPersistFailure(
+            SupervisorStrategy.restartWithBackoff(minBackoff = 3.seconds, maxBackoff = 10.seconds, randomFactor = 0.3)
+          )
+      }
     }
 
   implicit class UserResourceLinkOps(val pbState: UserResourceState) extends AnyVal {
 
+    def redeliver(
+      userId: String,
+      uniqueResources: ActorRef[resource.ResourceCmd],
+      redeliverAfter: FiniteDuration
+    )(implicit timer: TimerScheduler[UserCmd], logger: Logger): Unit =
+      pbState.lockState.foreach { ls =>
+        uniqueResources.tell(ls.pendingCmd)
+        logger.info("Redeliver {}", ls.pendingCmd)
+        timer.startSingleTimer(userId + "@" + ls.pendingCmd, RedeliveryTick(), redeliverAfter)
+      }
+
     def applyCmd(
       userId: String,
       cmd: UserCmd,
-      uniqueResources: ActorRef[resource.ResourceCmd]
+      uniqueResources: ActorRef[resource.ResourceCmd],
+      redeliverAfter: FiniteDuration
     )(implicit
       ctx: ActorContext[UserCmd],
-      refResolver: ActorRefResolver
-    ): ReplyEffect[UserResourceState] =
+      refResolver: ActorRefResolver,
+      timer: TimerScheduler[UserCmd]
+    ): ReplyEffect[UserResourceState] = {
+      implicit val logger = ctx.log
       cmd match {
         case GetResource(_, replyTo) =>
           pbState.linkedResource match {
@@ -104,11 +121,11 @@ object UserResourceLink {
                 }
           }
 
-        case assign @ Assign(userId, resourceToAssign, replyTo) =>
+        case assign @ Assign(userId, resourceToAssign, grpcClient) =>
           pbState.lockState match {
             case Some(_) =>
               Effect.none
-                .thenReply(refResolver.resolveActorRef(replyTo)) { _: UserResourceState =>
+                .thenReply(refResolver.resolveActorRef(grpcClient)) { _: UserResourceState =>
                   StatusReply.success(
                     ResourceReply(userId, ResourceReply.StatusCode.Aborted, ResourceLocation(-1, -1))
                   )
@@ -118,7 +135,7 @@ object UserResourceLink {
               pbState.linkedResource match {
                 case Some(linked) =>
                   Effect.none
-                    .thenReply(refResolver.resolveActorRef(replyTo)) { _: UserResourceState =>
+                    .thenReply(refResolver.resolveActorRef(grpcClient)) { _: UserResourceState =>
                       val reply =
                         if (linked.resource == assign.resource) ResourceReply.StatusCode.OKNoOp
                         else ResourceReply.StatusCode.AnotherResourceFound
@@ -130,32 +147,30 @@ object UserResourceLink {
                   ctx.log.warn(
                     s"Lock [$userId/${ResponseTag.Assigned}/$cmdSeqNum = ${resourceToAssign.uniqueKey}]"
                   )
-                  val updatedState =
-                    pbState.update(
-                      // intent
-                      _.lockState := LockState(pendingUserCmd = assign, pendingCmdSeqNum = cmdSeqNum)
+                  val pendingCmd =
+                    resource.Assign(
+                      assign.userId,
+                      resourceToAssign,
+                      cmdSeqNum,
+                      refResolver.toSerializationFormat(ctx.self)
                     )
+
+                  val updatedState = pbState.update(_.lockState := LockState(pendingCmd, grpcClient))
                   Effect
                     .persist(updatedState)
                     .thenRun { _: UserResourceState =>
-                      uniqueResources.tell(
-                        resource.Assign(
-                          assign.userId,
-                          resourceToAssign,
-                          cmdSeqNum,
-                          refResolver.toSerializationFormat(ctx.self)
-                        )
-                      )
+                      uniqueResources.tell(pendingCmd)
+                      timer.startSingleTimer(userId + "@" + cmdSeqNum, RedeliveryTick(), redeliverAfter)
                     }
                     .thenNoReply()
               }
           }
 
-        case release @ Release(userId, location, replyTo) =>
+        case Release(userId, location, grpcClient) =>
           pbState.lockState match {
             case Some(_) =>
               Effect.none
-                .thenReply(refResolver.resolveActorRef(replyTo)) { _: UserResourceState =>
+                .thenReply(refResolver.resolveActorRef(grpcClient)) { _: UserResourceState =>
                   StatusReply.success(
                     ResourceReply(userId, ResourceReply.StatusCode.Aborted, ResourceLocation(-1, -1))
                   )
@@ -167,27 +182,28 @@ object UserResourceLink {
                   if (linked.location == location) {
                     val cmdSeqNum = DurableStateBehavior.lastSequenceNumber(ctx)
                     ctx.log.warn(s"Lock [$userId/${ResponseTag.Unassigned}/$cmdSeqNum = ${linked.resource.uniqueKey}]")
-                    val updatedState =
-                      pbState.update(
-                        _.lockState := LockState(pendingUserCmd = release, pendingCmdSeqNum = cmdSeqNum)
+
+                    val pc =
+                      resource.Release(
+                        userId,
+                        linked.resource,
+                        linked.location,
+                        cmdSeqNum,
+                        refResolver.toSerializationFormat(ctx.self)
                       )
+
+                    val updatedState = pbState.update(_.lockState := LockState(pendingCmd = pc, grpcClient))
+
                     Effect
                       .persist(updatedState)
                       .thenRun { _: UserResourceState =>
-                        uniqueResources.tell(
-                          resource.Release(
-                            userId,
-                            linked.resource,
-                            linked.location,
-                            cmdSeqNum,
-                            refResolver.toSerializationFormat(ctx.self)
-                          )
-                        )
+                        uniqueResources.tell(pc)
+                        timer.startSingleTimer(userId + "@" + cmdSeqNum, RedeliveryTick(), redeliverAfter)
                       }
                       .thenNoReply()
                   } else {
                     Effect.none
-                      .thenReply(refResolver.resolveActorRef(replyTo)) { _: UserResourceState =>
+                      .thenReply(refResolver.resolveActorRef(grpcClient)) { _: UserResourceState =>
                         StatusReply.success(
                           ResourceReply(userId, ResourceReply.StatusCode.LocationNotFound, location)
                         )
@@ -195,7 +211,7 @@ object UserResourceLink {
                   }
                 case None =>
                   Effect.none
-                    .thenReply(refResolver.resolveActorRef(replyTo)) { _: UserResourceState =>
+                    .thenReply(refResolver.resolveActorRef(grpcClient)) { _: UserResourceState =>
                       StatusReply.success(
                         ResourceReply(userId, ResourceReply.StatusCode.OKNoOp, location)
                       )
@@ -203,11 +219,11 @@ object UserResourceLink {
               }
           }
 
-        case reassign @ Reassign(userId, resourceToAssign, location, replyTo) =>
+        case reassign @ Reassign(userId, resourceToAssign, location, grpcClient) =>
           pbState.lockState match {
             case Some(_) =>
               Effect.none
-                .thenReply(refResolver.resolveActorRef(replyTo)) { _: UserResourceState =>
+                .thenReply(refResolver.resolveActorRef(grpcClient)) { _: UserResourceState =>
                   StatusReply.success(
                     ResourceReply(userId, ResourceReply.StatusCode.Aborted, location)
                   )
@@ -219,7 +235,7 @@ object UserResourceLink {
                   if (linked.location == location) {
                     if (linked.resource.uniqueKey == resourceToAssign.uniqueKey) {
                       Effect.none
-                        .thenReply(refResolver.resolveActorRef(replyTo)) { _: UserResourceState =>
+                        .thenReply(refResolver.resolveActorRef(grpcClient)) { _: UserResourceState =>
                           StatusReply.success(
                             ResourceReply(userId, ResourceReply.StatusCode.OKNoOp, linked.location)
                           )
@@ -229,27 +245,27 @@ object UserResourceLink {
                       ctx.log.warn(
                         s"Lock [$userId/${ResponseTag.Reassigned}/$cmdSeqNum = ${resourceToAssign.uniqueKey}]"
                       )
-                      val updatedState =
-                        pbState.update(
-                          _.lockState := LockState(pendingUserCmd = reassign, pendingCmdSeqNum = cmdSeqNum)
+
+                      val pc =
+                        resource.Reassign(
+                          reassign.userId,
+                          resourceToAssign,
+                          linked.location,
+                          cmdSeqNum,
+                          refResolver.toSerializationFormat(ctx.self)
                         )
+
+                      val updatedState = pbState.update(_.lockState := LockState(pc, grpcClient))
                       Effect
                         .persist(updatedState)
                         .thenRun { _: UserResourceState =>
-                          uniqueResources.tell(
-                            resource.Reassign(
-                              reassign.userId,
-                              resourceToAssign,
-                              linked.location,
-                              cmdSeqNum,
-                              refResolver.toSerializationFormat(ctx.self)
-                            )
-                          )
+                          uniqueResources.tell(pc)
+                          timer.startSingleTimer(userId + "@" + cmdSeqNum, RedeliveryTick(), redeliverAfter)
                         }
                         .thenNoReply()
                     }
                   } else {
-                    Effect.none.thenReply(refResolver.resolveActorRef(replyTo)) { _: UserResourceState =>
+                    Effect.none.thenReply(refResolver.resolveActorRef(grpcClient)) { _: UserResourceState =>
                       StatusReply.success(
                         ResourceReply(userId, ResourceReply.StatusCode.LocationNotFound, linked.location)
                       )
@@ -258,7 +274,7 @@ object UserResourceLink {
 
                 case None =>
                   Effect.none
-                    .thenReply(refResolver.resolveActorRef(replyTo)) { _: UserResourceState =>
+                    .thenReply(refResolver.resolveActorRef(grpcClient)) { _: UserResourceState =>
                       StatusReply.success(
                         ResourceReply(userId, ResourceReply.StatusCode.UpdateFailure, location)
                       )
@@ -266,23 +282,25 @@ object UserResourceLink {
               }
           }
 
-        case Confirm(_, resource, location, requestTag, pendingCmdSeqNum, projection) =>
+        case Confirm(_, resource, location, requestTag, cmdSeqNum, projection) =>
           val projectionToReply = refResolver.resolveActorRef(projection)
 
           pbState.lockState match {
-            case Some(lock) =>
-              if (lock.pendingCmdSeqNum == pendingCmdSeqNum) {
-                val grpcClient =
-                  lock.pendingUserCmd.asMessage.sealedValue match {
-                    case UserCmdMessage.SealedValue.Assign(allocate) =>
-                      allocate.replyTo
-                    case UserCmdMessage.SealedValue.Release(release) =>
-                      release.replyTo
-                    case UserCmdMessage.SealedValue.Reassign(reassign) =>
-                      reassign.replyTo
-                    case other =>
-                      throw new Exception(s"Unexpected pending cmd: $other")
-                  }
+            case Some(ls) =>
+
+              val (pendingCmdSeqNum, grpcClient) =
+                ls.pendingCmd.asMessage.sealedValue match {
+                  case ResourceCmdMessage.SealedValue.Assign(assign) =>
+                    (assign.pendingCmdSeqNum, ls.grpcClient)
+                  case ResourceCmdMessage.SealedValue.Release(release) =>
+                    (release.pendingCmdSeqNum, ls.grpcClient)
+                  case ResourceCmdMessage.SealedValue.Reassign(reassign) =>
+                    (reassign.pendingCmdSeqNum, ls.grpcClient)
+                  case other =>
+                    throw new Exception(s"Unexpected pending cmd: $other")
+                }
+
+              if (pendingCmdSeqNum == cmdSeqNum) {
 
                 val (updatedState, statusReply) =
                   requestTag match {
@@ -310,21 +328,21 @@ object UserResourceLink {
                 Effect
                   .persist(updatedState)
                   .thenRun { _ =>
-                    ctx.log.warn(s"Unlock [$userId/$requestTag/$pendingCmdSeqNum = ${resource.uniqueKey}]")
+                    ctx.log.warn(s"Unlock [$userId/$requestTag/$cmdSeqNum = ${resource.uniqueKey}]")
                     if (projection.nonEmpty) {
-                      ctx.log.info(s"Confirm $pendingCmdSeqNum")
+                      ctx.log.info(s"Confirm $cmdSeqNum")
                       projectionToReply.tell(StatusReply.success(akka.Done))
                     }
                   }
                   .thenReply(refResolver.resolveActorRef(grpcClient)) { _: UserResourceState =>
-                    ctx.log.info(s"Released ${requestTag.name}-lock /${updatedState.linkedResource.getOrElse("")}")
+                    ctx.log.info(s"Released ${requestTag.name}-lock / ${updatedState.linkedResource.getOrElse("")}")
                     statusReply
                   }
-              } else if (lock.pendingCmdSeqNum > pendingCmdSeqNum) {
+              } else if (pendingCmdSeqNum > cmdSeqNum) {
                 Effect.none
                   .thenRun { _: UserResourceState =>
                     if (projection.nonEmpty) {
-                      ctx.log.info(s"Reconfirm old cmd $pendingCmdSeqNum")
+                      ctx.log.info(s"Reconfirm old cmd $cmdSeqNum")
                       projectionToReply.tell(StatusReply.success(akka.Done))
                     }
                   }
@@ -332,7 +350,7 @@ object UserResourceLink {
               } else {
                 Effect.none
                   .thenRun { _: UserResourceState =>
-                    ctx.log.warn(s"Got Confirm(${pendingCmdSeqNum}) but ${lock.pendingCmdSeqNum} expected")
+                    ctx.log.warn(s"Got Confirm(${cmdSeqNum}) but ${pendingCmdSeqNum} expected")
                   }
                   .thenNoReply()
               }
@@ -341,26 +359,35 @@ object UserResourceLink {
               Effect.none
                 .thenRun { _: UserResourceState =>
                   if (projection.nonEmpty) {
-                    ctx.log.info(s"Reconfirm(${pendingCmdSeqNum})")
+                    ctx.log.info(s"Reconfirm(${cmdSeqNum})")
                     projectionToReply.tell(StatusReply.success(akka.Done))
                   }
                 }
                 .thenNoReply()
           }
 
-        case com.resource.domain.user.Passivate() =>
+        case RedeliveryTick() =>
+          Effect
+            .none[UserResourceState]
+            .thenRun { _ =>
+              pbState.redeliver(userId, uniqueResources, redeliverAfter)
+            }
+            .thenNoReply()
+
+        case user.Passivate() =>
           Effect
             .none[UserResourceState]
             .thenRun(_ => ctx.log.info(s"Passivate"))
             .thenStop()
             .thenNoReply()
 
-        case com.resource.domain.user.UserCmd.Empty =>
+        case user.UserCmd.Empty =>
           Effect
             .none[UserResourceState]
             .thenRun(_ => ctx.log.info(s"Got Empty"))
             .thenStop()
             .thenNoReply()
       }
+    }
   }
 }
