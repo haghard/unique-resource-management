@@ -5,3 +5,4 @@ project/project
 target
 logs
 /pgdata18/
+/.sbtopts
