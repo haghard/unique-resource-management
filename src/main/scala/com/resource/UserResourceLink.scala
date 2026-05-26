@@ -56,9 +56,10 @@ object UserResourceLink {
   ): Behavior[UserCmd] =
     Behaviors.setup { implicit ctx =>
       Behaviors.withTimers { implicit timer =>
-        val userId                                 = ctx.self.path.elements.last
+        val userId         = ctx.self.path.elements.last
+        val redeliverAfter =
+          ctx.system.settings.config.getDuration("akka.cluster.sharding.redelivery-interval").toSeconds.seconds
         implicit val refResolver: ActorRefResolver = ActorRefResolver(ctx.system)
-        val redeliverAfter: FiniteDuration         = 6.seconds
 
         DurableStateBehavior
           .withEnforcedReplies[UserCmd, UserResourceState](

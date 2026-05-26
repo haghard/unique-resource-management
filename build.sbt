@@ -1,6 +1,7 @@
-ThisBuild / version := "0.1.0"
 
-ThisBuild / scalaVersion := "2.13.18"
+version := "0.1.1"
+scalaVersion := "2.13.18"
+name := "resources"
 
 val releaseJvmVersion = "17"
 
@@ -17,27 +18,12 @@ javaHome := Some(file("/Library/Java/JavaVirtualMachines/jdk-17.jdk/Contents/Hom
 Akka-2.7.0(22.10)
 https://doc.akka.io/reference/release-notes/
 */
-
 val AkkaVersion = "2.7.0"
 val AkkaHttpVersion = "10.4.0"
 val AkkaManagementVersion = "1.2.0"
 val AkkaPersistenceJdbcV = "5.2.0"
 val AkkaPersistenceR2dbcVersion = "1.0.1"
 val AkkaProjectionVersion = sys.props.getOrElse("akka-projection.version", "1.3.0")
-
-lazy val java17Settings = Seq(
-  "--add-opens",
-  "java.base/java.nio=ALL-UNNAMED",
-  "--add-opens",
-  "java.base/sun.nio.ch=ALL-UNNAMED"
-)
-
-lazy val root = (project in file("."))
-  .settings(
-    name := "unique-resource-management",
-    javaOptions ++= java17Settings,
-  )
-  .enablePlugins(AkkaGrpcPlugin)
 
 //https://mvnrepository.com/artifact/com.lihaoyi/ammonite
 //https://github.com/com-lihaoyi/Ammonite/releases
@@ -56,6 +42,9 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion,
   "com.lightbend.akka.management" %% "akka-management-cluster-http" % AkkaManagementVersion,
 
+  "com.lightbend.akka.management" %%  "akka-lease-kubernetes"             % AkkaManagementVersion,
+  "com.lightbend.akka.discovery"  %%  "akka-discovery-kubernetes-api"     % AkkaManagementVersion,
+
   "ch.qos.logback" % "logback-classic" % "1.5.32",
   "org.slf4j"      % "slf4j-api"       %  "2.0.18",
 
@@ -66,29 +55,30 @@ libraryDependencies ++= Seq(
 
   "com.lightbend.akka" %% "akka-persistence-r2dbc" % AkkaPersistenceR2dbcVersion,
 
-  //"com.lightbend.akka" %% "akka-projection-durable-state" % "1.4.0",
   "com.lightbend.akka" %% "akka-projection-r2dbc" % AkkaPersistenceR2dbcVersion, //AkkaProjectionVersion
   "com.lightbend.akka" %% "akka-projection-eventsourced" % AkkaProjectionVersion,
 
-  //"org.hdrhistogram" % "HdrHistogram" % "2.2.2",
+  "org.hdrhistogram" % "HdrHistogram" % "2.2.2",
   "com.lihaoyi" % "ammonite" % AmmoniteVersion % "test" cross CrossVersion.full
 )
 
 addCommandAlias("c", "compile")
 addCommandAlias("r", "reload")
 
-enablePlugins(JavaAppPackaging, DockerPlugin)
-dockerBaseImage := "docker.io/library/adoptopenjdk:17-jre-hotspot"
-dockerUsername := sys.props.get("docker.username")
-dockerRepository := sys.props.get("docker.registry")
-dockerUpdateLatest := true
-ThisBuild / dynverSeparator := "-"
+enablePlugins(AkkaGrpcPlugin, JavaAppPackaging, DockerPlugin, BuildInfoPlugin)
+
+Compile / mainClass := Some("com.resource.App")
+Compile / run := Some("com.resource.App")
+
+//dockerBaseImage := "docker.io/library/adoptopenjdk:17-jre-hotspot"
 
 Compile / scalacOptions ++= Seq(
+  //Migration mode. Preparing your code to be fully moved to Scala 3.
+  //It enables Scala 3 specific syntax (like * for wildcards instead of _) and changes certain compiler behaviors to match Scala 3’s stricter rules.
   "-Xsource:3",
   //"-Xsource:3-cross",
-  "-Wconf:msg=lambda-parens:s",
   s"-release:$releaseJvmVersion", // tells the Scala compiler to emit bytecode that is compatible with JDK N.
+  "-Wconf:msg=lambda-parens:s",
   "-Xlog-reflective-calls",
   "-Xlint",
   "-Vtype-diffs",
@@ -103,13 +93,75 @@ Compile / scalacOptions ++= Seq(
 
 javacOptions ++= Seq("-source", releaseJvmVersion, "-target", releaseJvmVersion)
 
+javaOptions ++= Seq(
+  //"-XX:+PrintFlagsFinal",
+  "-XX:+PrintCommandLineFlags",
+  "-XshowSettings:all",
+
+  "-Xmx256m",
+  "-Xms128m",
+
+  "-XX:+AlwaysPreTouch",
+  "-XX:MaxDirectMemorySize=64m",
+
+  // https://dzone.com/articles/troubleshooting-problems-with-native-off-heap-memo
+  // To allow getting native memory stats for threads
+  "-XX:NativeMemoryTracking=summary", // detail
+
+  "-XX:ActiveProcessorCount=6",
+
+  "-XX:+UseZGC",
+  //"--add-opens",  "java.base/java.nio=ALL-UNNAMED",
+  //"--add-opens",  "java.base/sun.nio.ch=ALL-UNNAMED",
+
+  "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED",
+  "--add-opens=java.base/java.lang=ALL-UNNAMED",
+  "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED",
+  "--add-opens=java.base/java.io=ALL-UNNAMED",
+  "--add-exports=jdk.unsupported/sun.misc=ALL-UNNAMED",
+)
+
+dockerBaseImage   := "haghard/jdk17-open-table:1.0.1" //TODO: build it for jdk21
+dockerRepository    := Some("haghard")
+dockerExposedPorts     := Seq(8080, 8558, 25520)
+Docker / daemonUser    := "root"
+Docker / daemonUserUid := None
+// Publish settings
+Compile / packageDoc / publishArtifact := false // speed up building Docker images
+Compile / packageSrc / publishArtifact := false // speed up building Docker images
+dockerUpdateLatest := true
+
+//dockerBuildxPlatforms := Seq("linux/amd64")
+
+// docker:publish
+dockerBuildCommand := {
+  if (sys.props("os.arch") != "amd64") {
+    // use buildx with platform to build supported amd64 images on other CPU architectures
+    // this may require that you have first run 'docker buildx create' to set docker buildx up
+    dockerExecCommand.value ++ Seq(
+      "buildx",
+      "build",
+      "--platform=linux/amd64",
+      "--load") ++ dockerBuildOptions.value :+ "."
+  } else dockerBuildCommand.value
+}
+
+// make version compatible with docker for publishing
+ThisBuild / dynverSeparator := "-"
+
+buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion)
+buildInfoPackage := "com.resource"
+buildInfoOptions := Seq(BuildInfoOption.BuildTime)
+buildInfoOptions += BuildInfoOption.BuildTime
+
 scalafmtOnCompile := true
 
-run / fork := false
-//run / fork := true
+//run / fork := false
+run / fork := true
+run / connectInput := true
 
 // Allow ctrl-c to kill forked tasks without killing SBT
-//Global / cancelable := true
+Global / cancelable := true
 
 dependencyOverrides ++= Seq(
   "com.typesafe.akka" %% "akka-actor-typed"             % AkkaVersion,

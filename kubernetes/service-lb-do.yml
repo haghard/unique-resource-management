@@ -1,0 +1,82 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: resources-lb
+  namespace: resources-ns
+spec:
+  type: LoadBalancer
+  selector:
+    app: resources
+  ports:
+    - name: http
+      port: 80
+      targetPort: http
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: resources-management
+  namespace: resources-ns
+spec:
+  type: ClusterIP
+  selector:
+    app: resources
+  ports:
+    - name: management
+      protocol: TCP
+      port: 80
+      targetPort: management
+---
+
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: resources-ingress-lb
+  namespace: resources-ns
+spec:
+  rules:
+    - http:
+        paths:
+          - path: /cluster/members
+            pathType: Prefix
+            backend:
+              service:
+                name: resources-management
+                port:
+                  number: 80
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: resources-lb
+                port:
+                  number: 80
+---
+
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: pod-reader
+  namespace: resources-ns
+rules:
+  - apiGroups: [""] # "" indicates the core API group
+    resources: ["pods"]
+    verbs: ["get", "watch", "list"]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: read-pods
+  namespace: resources-ns
+subjects:
+  # Note the `name` line below. The first default refers to the namespace. The second refers to the service account name.
+  # For instance, `name: system:serviceaccount:myns:default` would refer to the default service account in namespace `myns`
+  - kind: User
+    name: system:serviceaccount:resources-ns:default
+    apiGroup: rbac.authorization.k8s.io
+roleRef:
+  kind: Role
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io
+

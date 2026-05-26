@@ -30,6 +30,7 @@ final class CRDTSerializer(system: ExtendedActorSystem)
       case orMultiMap: ORMultiMap[ServiceKey[_], _] @unchecked =>
         // ORMultiMap(204)[ServiceKey[akka.actor.typed.internal.pubsub.TopicImpl$Command](r2dbc-taken-dfn-688),ServiceKey[akka.actor.typed.internal.pubsub.TopicImpl$Command](r2dbc-taken-dfn-953)...]
 
+        /*
         val keys = orMultiMap.underlying.keys.elements
 
         system.log.warning(
@@ -42,7 +43,8 @@ final class CRDTSerializer(system: ExtendedActorSystem)
             }
             .mkString(",")*/
           keys.take(2).map(_.id).mkString("[", ",", "]")
-        )
+        )*/
+
         super.toBinary(orMultiMap)
 
       case crdt =>

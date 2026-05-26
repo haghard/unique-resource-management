@@ -1,0 +1,11 @@
+{
+  "kind": "Namespace",
+  "apiVersion": "v1",
+  "metadata": {
+    "name": "resources-ns",
+    "labels": {
+      "name": "resources-ns"
+    }
+  }
+}
+

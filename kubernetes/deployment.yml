@@ -1,0 +1,204 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  labels:
+    app: resources
+  name: resources
+  namespace: resources-ns
+spec:
+  # If changing this, ensure REQUIRED_CONTACT_POINT_NR is more than half this number, to ensure only one cluster
+  # will ever bootstrap when starting from scratch.
+  replicas: 2
+  selector:
+    matchLabels:
+      app: resources
+  #Rolling update by replacing one instance after the other with max. of 3 replicas at a time
+  #https://doc.akka.io/docs/akka-management/current/bootstrap/recipes.html#update-strategy
+  #For small clusters it may make sense to set maxUnavailable to 0 and maxSurge to 1. This means that a new pod is created
+  #before removing any existing pods so if the new pod fails the cluster remains at full strength until a rollback happens.
+  #For large clusters it may be too slow to do 1 pod at a time.
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1       # Spin up only one node at a time
+      maxUnavailable: 0 # We always have to have 2 replicas serving http traffic
+  # mark the deployment as failed, if not finished in 60 seconds
+  progressDeadlineSeconds: 60
+  template:
+    metadata:
+      labels:
+        app: resources
+        actorSystemName: resources
+    spec:
+      # Termination grace period calculates as:
+      # Internal shutdown timeout (10) + preStop timeout (8) + 4 seconds buffer time
+      terminationGracePeriodSeconds: 23
+      volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+        #- name: logs
+        #  emptyDir: { }
+      containers:
+        - name:  resources
+          image: haghard/resources:0.1.1
+          imagePullPolicy: Always
+          #args:
+            #- -cpus
+            #- "2"
+            ##- "-Dapp.dir=$(REQUIRED_CONTACT_POINT_NR)"
+          readinessProbe:
+            httpGet:
+              path: /ready
+              port: management
+            # During rolling update it will take at least 15 seconds to start the app and join the cluster. Hence, perform the first readiness check after this time.
+            initialDelaySeconds: 15
+            timeoutSeconds: 2
+            periodSeconds: 2
+            failureThreshold: 3 #
+          livenessProbe:
+            httpGet:
+              path: /alive
+              port: management
+              httpHeaders:
+                - name: X-Custom-Header
+                  value: Awesome
+            periodSeconds: 5
+            timeoutSeconds: 2
+            failureThreshold: 3
+            # Give the app 20 sec time to start up before performing first liveness check
+            initialDelaySeconds: 20
+          ports:
+            - name: management
+              containerPort: 8558
+              protocol: TCP
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          securityContext:
+            capabilities:
+              add:
+                - NET_ADMIN
+          resources:
+            requests:
+              cpu: "0.2"
+              #cpu: "1000m"
+              memory: "256Mi"
+              #memory: "1Gi"
+            limits:
+              cpu: "2"
+              #memory: "2Gi"
+              memory: "1750Mi"
+
+          volumeMounts:
+            - mountPath: /dev/shm
+              name: dshm
+          #volumeMounts:
+          #  - mountPath: /data/wallets/logs
+          #    name: logs
+          env:
+            - name: REQ_CONTACT_POINT_VAR
+              valueFrom:
+                configMapKeyRef:
+                  name: resources-dev-config
+                  key: REQ_CONTACT_POINT
+            - name: APP_PSW_VAR
+              valueFrom:
+                secretKeyRef:
+                  name: app-password
+                  key: password
+            - name: NAMESPACE
+              valueFrom:
+                fieldRef:
+                  fieldPath: metadata.namespace
+            - name: app.dir
+              valueFrom:
+                configMapKeyRef:
+                  name: resources-dev-config
+                  key: APP_DIR
+            #- name: JAVA_TOOL_OPTIONS
+            #  value: "-XX:+UseG1GC -XX:+PrintCommandLineFlags -XshowSettings:vm -XX:InitialRAMPercentage=70 -XX:MaxRAMPercentage=75 -Dwallers.grpc.port=2 -XX:ActiveProcessorCount=2"
+            - name: JAVA_OPTS
+              value: "-XX:ActiveProcessorCount=2 -XX:+UseG1GC -XX:+PrintCommandLineFlags -XshowSettings:vm -XX:+AlwaysActAsServerClassMachine -XX:InitialRAMPercentage=75 -XX:MaxRAMPercentage=75 -DGRPC_PORT=8080 -Dakka.remote.artery.canonical.port=2550"
+              #JAVA_OPTS
+              ##value: "-XX:+UseG1GC -XX:+PrintCommandLineFlags -XshowSettings:vm -Xms128m -Xmx128m -Dconfig.resource=prod-application.conf"
+          lifecycle:
+            preStop:
+              exec:
+                # The existence of the /tmp/shutdown is configured to be checked every periodSeconds(2) secs up to failureThreshold(3) attempts.
+                # Only after (2 * 3) sec the pod will be removed from rotation(no more HTTP traffic).
+                # The initialDelaySeconds parameter requests the kubelet to wait for 15 seconds before the first probe.
+
+                # Create file for readiness probe.
+                # Waiting for readiness check to fail.
+                # The readiness check is responsible for taking container out of traffic before actually shutting down.
+                # The sleep time is based on the time it takes that the readiness check fails:
+                #   (readinessProbe.failureThreshold * readinessProbe.periodSeconds) + extra second
+                command: [ "/bin/bash", "-c", "touch /tmp/shutdown && sleep 8" ]
+
+---
+apiVersion: "akka.io/v1"
+kind: Lease
+metadata:
+  name: resources-akka-sbr
+  namespace: resources-ns
+spec:
+  owner: ""
+  time: 0
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: resources-dev-config
+  namespace: resources-ns
+data:
+  APP_DIR: /app/resources_data_dev
+  REQ_CONTACT_POINT: "2"
+
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: resources-prod-config
+  namespace: resources-ns
+data:
+  APP_DIR: /app/resources_data_prod
+  REQ_CONTACT_POINT: "2"
+
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: app-password
+  namespace: resources-ns
+type: Opaque
+stringData:
+  password: secret1
+
+
+---
+kind: Role
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: pod-reader
+  namespace: resources-ns
+rules:
+  - apiGroups: [ "" ] # "" indicates the core API group
+    resources: [ "pods" ]
+    verbs: [ "get", "watch", "list" ]
+---
+kind: RoleBinding
+apiVersion: rbac.authorization.k8s.io/v1
+metadata:
+  name: read-pods
+  namespace: resources-ns
+subjects:
+  # Note the `name` line below. The first default refers to the namespace. The second refers to the service account name.
+  # For instance, `name: system:serviceaccount:myns:default` would refer to the default service account in namespace `myns`
+  - kind: User
+    name: system:serviceaccount:resources-ns:default
+roleRef:
+  kind: Role
+  name: pod-reader
+  apiGroup: rbac.authorization.k8s.io

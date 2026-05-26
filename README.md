@@ -59,7 +59,7 @@ Client1 `Update(user=2, from=x, to=y)` <> Client2 `Update(user=2, from=x, to=z)`
 
 ✅ Clients are able to order their own operations and provide a globally unique ID (`user_id`).
 
-It's a relative order invariant. Resource acquisition requires a `precondition check`.  Releasing resource doesn't require any checks and cannot fail. Causal ordering if enough to guarantee that we never violate anything here.
+It's a relative order invariant. Resource acquisition requires a `precondition check`.  Releasing resource doesn't require any checks and should succeed eventually. Causal ordering if enough to guarantee we never violate anything in this flow.
 
 
 # How to run 
@@ -204,3 +204,44 @@ Another similar domain and use cases:
    * library: users / books
    * vehicles renting
    * students and course subscriptions
+
+
+
+grpcurl -d '{"resource":{"name":"a","version":1},"user_id":"211367c3-9ad3-47ef-a6b0-784d52c96482" }' -plaintext 174.138.113.57:8080 com.resource.api.ResourceService/Assign
+
+```
+
+                     
+kubectl --kubeconfig=./kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml delete namespaces resources-ns
+
+kubectl --kubeconfig=./kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml apply -f kubernetes/namespace.json
+kubectl --kubeconfig=./kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml config set-context --current --namespace=resources-ns
+
+kubectl --kubeconfig=./kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml create -f kubernetes/sbr-lease.yml -n resources-ns
+kubectl --kubeconfig=/kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml apply -f kubernetes/service-lb-do.yml
+
+kubectl --kubeconfig=./kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml apply -f kubernetes/deployment.yml
+kubectl --kubeconfig=./kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml scale deployment/resources --replicas=2
+
+
+kubectl --kubeconfig=./kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml get deployments
+kubectl --kubeconfig=./kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml get pods
+kubectl --kubeconfig=./kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml get services
+
+kubectl --kubeconfig=./kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml logs -f -c resources resources-94cdcfbfb-c2vjr
+
+kubectl delete pod <pod-name>
+
+```
+
+
+### Drop all tcp traffic to simulate split brain
+````
+
+kubectl --kubeconfig=./kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml exec -it resources-64bb48b97d-r99bz -- /bin/sh
+
+iptables -A INPUT -p tcp -j DROP
+  
+iptables -D INPUT -p tcp -j DROP`
+
+```
