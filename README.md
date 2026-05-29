@@ -238,7 +238,7 @@ kubectl delete pod <pod-name>
 ```
 
 
-### Drop all tcp traffic to simulate split brain
+### Drop all traffic to simulate split brain
 ```
 kubectl --kubeconfig=./kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml exec -it resources-5dccbd4fd-qlw8h -- /bin/sh
 
