@@ -82,7 +82,7 @@ libraryDependencies ++= Seq(
 
   "com.lightbend.akka" %% "akka-persistence-r2dbc" % AkkaPersistenceR2dbcVersion,
 
-  "com.lightbend.akka" %% "akka-projection-r2dbc" % AkkaPersistenceR2dbcVersion, //AkkaProjectionVersion
+  "com.lightbend.akka" %% "akka-projection-r2dbc" % AkkaProjectionVersion,
   "com.lightbend.akka" %% "akka-projection-eventsourced" % AkkaProjectionVersion,
 
   "org.hdrhistogram" % "HdrHistogram" % "2.2.2",

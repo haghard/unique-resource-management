@@ -21,12 +21,23 @@ object utils {
         .asInstanceOf[akka.cluster.sharding.internal.LeastShardAllocationStrategy]
     leastShardAllocationNew
   }
+  // ShardCoordinator.Internal.State comes from akka.cluster.sharding.DDataShardCoordinator
+  // all ShardCoordinator keys: rsCoordinatorState, usr-rsCoordinatorState, sharded-daemon-process-rs-projCoordinatorState, sharded-daemon-process-usr-rs-projCoordinatorState
+  val CoordinatorStateKey =
+    LWWRegisterKey[ShardCoordinator.Internal.State](s"${TakenUniqueResource.TypeKey.name}CoordinatorState")
 
-  val typeName: String    = TakenUniqueResource.TypeKey.name
-  val CoordinatorStateKey = LWWRegisterKey[ShardCoordinator.Internal.State](s"${typeName}CoordinatorState")
+  /*
+   val CoordinatorStateKey = LWWRegisterKey[ShardCoordinator.Internal.State](s"${com.resource.UserResource.TypeKey.name}CoordinatorState")
+    val CoordinatorStateKey = LWWRegisterKey[ShardCoordinator.Internal.State](
+    s"sharded-daemon-process-${com.resource.UserResource.TypeKey.name}-projCoordinatorState"
+    )
+    val CoordinatorStateKey = LWWRegisterKey[ShardCoordinator.Internal.State](
+      s"sharded-daemon-process-${TakenUniqueResource.TypeKey.name}-projCoordinatorState"
+    )
+   */
 
   def shardingStateChanges(dDataShardReplicator: ActorRef, selfHost: String)(implicit
-    sys: ActorSystem[_]
+    system: ActorSystem[_]
   ): KillSwitch = {
     val actorWatchingFlow =
       Flow[String]
@@ -59,7 +70,7 @@ object utils {
           // .append(state.shards.map { case (k, ar) => s"$k:${ar.path.address.host.getOrElse(selfHost)}" }.mkString(","))
           // .append("]")
           // .append("\n")
-          .append(s"ShardCoordinatorState($selfHost) updated [ ")
+          .append(s"${CoordinatorStateKey._id}: ShardCoordinatorState($selfHost) updated [ ")
           .append(
             shardCoordinatorState.regions
               .map { case (sr, shards) => s"${sr.path.address.host.getOrElse(selfHost)}:[${shards.mkString(",")}]" }
@@ -70,14 +81,14 @@ object utils {
       }
       .via(actorWatchingFlow)
       .viaMat(KillSwitches.single)(Keep.right)
-      .to(Sink.foreach(stateLine => sys.log.warn(stateLine)))
+      .to(Sink.foreach(stateLine => system.log.error(stateLine)))
       .withAttributes(
         ActorAttributes.supervisionStrategy {
           case ex: akka.stream.WatchedActorTerminatedException =>
-            sys.log.error("Replicator failed. Terminate stream", ex)
+            system.log.error("Replicator failed. Terminate stream", ex)
             Supervision.Stop
           case ex: Throwable =>
-            sys.log.error("Unexpected error!", ex)
+            system.log.error("Unexpected error!", ex)
             Supervision.Stop
         }
       )

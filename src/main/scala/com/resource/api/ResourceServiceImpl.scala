@@ -22,9 +22,7 @@ final class ResourceServiceImpl(
 
   // val r2dbcDao = new R2dbcDao(system)
 
-  override def assign(request: AssignResourceRequest): Future[ResourceReply] = {
-    val s = System.currentTimeMillis()
-    println("0. ResourceServiceImpl GRPC at " + s)
+  override def assign(request: AssignResourceRequest): Future[ResourceReply] =
     userResource
       .askWithStatus[ResourceReply](replyTo =>
         Assign(request.userId, request.resource, actorRefResolver.toSerializationFormat(replyTo))
@@ -38,27 +36,19 @@ final class ResourceServiceImpl(
               )
           )
         else {
-          val d = System.currentTimeMillis() - s
-          println(s"latency:${d}")
           Future.successful(reply)
         }
       }
-  }
 
   def release(
     request: com.resource.api.ReleaseResourceRequest
-  ): scala.concurrent.Future[com.resource.api.ResourceReply] = {
-    val s = System.currentTimeMillis()
+  ): scala.concurrent.Future[com.resource.api.ResourceReply] =
     userResource
       .askWithStatus[ResourceReply] { replyTo =>
-        val d = System.currentTimeMillis() - s
-        println(s"latency:${d}")
         Release(request.userId, request.location, actorRefResolver.toSerializationFormat(replyTo))
       }
-  }
 
-  override def reassign(request: ReassignResourceRequest): Future[ResourceReply] = {
-    val s = System.currentTimeMillis()
+  override def reassign(request: ReassignResourceRequest): Future[ResourceReply] =
     userResource
       .askWithStatus[ResourceReply](replyTo =>
         Reassign(
@@ -82,12 +72,9 @@ final class ResourceServiceImpl(
               )
           )
         else {
-          val d = System.currentTimeMillis() - s
-          println(s"latency:${d}")
           Future.successful(reply)
         }
       }
-  }
 
   override def getResource(request: GetResourceRequest): Future[GetResourceReply] =
     userResource

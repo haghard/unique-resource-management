@@ -4,7 +4,6 @@ import akka.actor.RootActorPath
 import akka.actor.typed.scaladsl.adapter.TypedActorSystemOps
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.*
-import akka.actor.typed.scaladsl.AskPattern.Askable
 import akka.cluster.ddata.SelfUniqueAddress
 import akka.cluster.sharding.typed.ClusterShardingSettings
 import akka.cluster.sharding.typed.scaladsl.*
@@ -131,7 +130,7 @@ object Guardian {
             val numberOfSlices             = system.settings.config.getInt("akka.projection.r2dbc.number-of-slices")
 
             /*
-               3 ddata replicators in total
+               replicators
                "system" / "clusterReceptionist" / "replicator"
                "system" / "ddataReplicator"
                "system" / "sharding" / replicator

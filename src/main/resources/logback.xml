@@ -43,6 +43,16 @@
 
   <logger name="akka.management.cluster.bootstrap.internal.HttpContactPointBootstrap" level="error"/>
   <logger name="com.datastax.oss.driver.internal.core.pool.ChannelPool" level="error"/>
+  <logger name="io.r2dbc.postgresql.QUERY" level="error"/>
+  <logger name="io.r2dbc.postgresql.PARAM" level="error"/>
+  <logger name="io.r2dbc.postgresql.client.ReactorNettyClient" level="error"/>
+  <logger name="io.r2dbc.pool.ConnectionPool" level="error"/>
+  <logger name="io.r2dbc.pool.PooledConnection" level="error"/>
+  <logger name="akka.persistence.r2dbc.query.scaladsl.QueryDao" level="error"/>
+  <logger name="akka.persistence.r2dbc.query.scaladsl.R2dbcReadJournal" level="error"/>
+  <logger name="akka.persistence.r2dbc.state.scaladsl.R2dbcDurableStateStore" level="error"/>
+  <logger name="akka.persistence.r2dbc.state.scaladsl.DurableStateDao" level="error"/>
+  <logger name="akka.http.impl.engine.client.PoolId" level="error"/>
 
   <appender name="asyncFile" class="ch.qos.logback.classic.AsyncAppender">
     <appender-ref ref="SERVER"/>

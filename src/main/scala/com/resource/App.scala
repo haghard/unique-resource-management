@@ -31,6 +31,12 @@ object App extends Ops {
 
     val config =
       if (onKubernetes()) {
+        applySystemProperties(
+          Map(
+            "-Dakka.persistence.r2dbc.connection-factory.ssl.enabled" -> "true",
+            "-Dakka.persistence.r2dbc.connection-factory.ssl.mode"    -> "require"
+          )
+        )
         ConfigFactory.load()
       } else {
 

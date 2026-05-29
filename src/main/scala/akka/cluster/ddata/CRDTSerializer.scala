@@ -19,6 +19,7 @@ final class CRDTSerializer(system: ExtendedActorSystem)
           // State from akka.cluster.sharding.DDataShardCoordinator
           case state: akka.cluster.sharding.ShardCoordinator.Internal.State =>
             system.log.warning("Shards online: {} ", state.shards.keySet.size)
+
           case _ =>
         }
         super.toBinary(obj)
@@ -30,8 +31,8 @@ final class CRDTSerializer(system: ExtendedActorSystem)
       case orMultiMap: ORMultiMap[ServiceKey[_], _] @unchecked =>
         // ORMultiMap(204)[ServiceKey[akka.actor.typed.internal.pubsub.TopicImpl$Command](r2dbc-taken-dfn-688),ServiceKey[akka.actor.typed.internal.pubsub.TopicImpl$Command](r2dbc-taken-dfn-953)...]
 
+        /*
         val keys = orMultiMap.underlying.keys.elements
-
         system.log.warning(
           "ORMultiMap(size={}) {}",
           keys.size,
@@ -43,6 +44,7 @@ final class CRDTSerializer(system: ExtendedActorSystem)
             .mkString(",")*/
           keys.take(2).map(_.id).mkString("[", ",", "]")
         )
+         */
 
         super.toBinary(orMultiMap)
 
