@@ -55,7 +55,7 @@ Client1 `Update(user=2, from=x, to=y)` <> Client2 `Update(user=2, from=x, to=z)`
 
 ## Requirements
  
-✅ Application correctness.
+✅ Application correctness
 
 ✅ Clients are able to order their own operations and provide a globally unique ID (`user_id`).
 
@@ -217,7 +217,15 @@ kubectl --kubeconfig=./kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.
 kubectl --kubeconfig=./kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml config set-context --current --namespace=resources-ns
 
 kubectl --kubeconfig=./kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml create -f kubernetes/sbr-lease.yml -n resources-ns
-kubectl --kubeconfig=/kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml apply -f kubernetes/service-lb-do.yml
+kubectl --kubeconfig=./kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml apply -f kubernetes/service-lb-do.yml
+
+kubectl --kubeconfig=./kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml create secret generic \
+    db-secret \
+    --from-literal=DB_HOST=... \
+    --from-literal=DB_NAME=... \
+    --from-literal=DB_USER=... \
+    --from-literal=DB_PASSWORD=... \
+    --from-literal=DB_PORT=...
 
 kubectl --kubeconfig=./kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml apply -f kubernetes/deployment.yml
 kubectl --kubeconfig=./kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml scale deployment/resources --replicas=2

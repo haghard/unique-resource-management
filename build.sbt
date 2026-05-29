@@ -1,5 +1,5 @@
 
-version := "0.2.0"
+version := "0.2.1"
 scalaVersion := "2.13.18"
 name := "resources"
 
@@ -82,13 +82,7 @@ libraryDependencies ++= Seq(
 
   "com.lightbend.akka" %% "akka-persistence-r2dbc" % AkkaPersistenceR2dbcVersion,
 
-
-  //"com.lightbend.akka" %% "akka-projection-durable-state" % "1.4.0", //May 11, 2023
-  "com.lightbend.akka" %% "akka-projection-durable-state" % "1.4.1",  //May 30, 2023
-  //https://repo.akka.io/bj7KwaUIoiozNSjYcwmp1pk9o5WhYsitN1fNp_NQiICNhEm2/secure/com/lightbend/akka/akka-projection-durable-state_2.13/1.4.2/
-
-
-  "com.lightbend.akka" %% "akka-projection-r2dbc" % AkkaProjectionVersion, // AkkaPersistenceR2dbcVersion, //AkkaProjectionVersion
+  "com.lightbend.akka" %% "akka-projection-r2dbc" % AkkaPersistenceR2dbcVersion, //AkkaProjectionVersion
   "com.lightbend.akka" %% "akka-projection-eventsourced" % AkkaProjectionVersion,
 
   "org.hdrhistogram" % "HdrHistogram" % "2.2.2",
@@ -114,14 +108,14 @@ Compile / scalacOptions ++= Seq(
   "-Wconf:msg=lambda-parens:s",
   "-Xlog-reflective-calls",
   "-Xlint",
-  //"-Vtype-diffs",
+  "-Vtype-diffs",
   "-Xmigration", //Emit migration warnings under -Xsource:3 as fatal warnings, not errors; -Xmigration disables fatality (#10439 by @som-snytt, #10511)
   "-Vimplicits", // makes the compiler print implicit resolution chains when no implicit value can be found
   "-Ylog-classpath", //log classpath
   s"-Wconf:src=${(Compile / target).value}/scala-2.13/akka-grpc/.*:silent",
   "-Wconf:msg=Marked as deprecated in proto file:silent",
   //"-Wconf:cat=other-match-analysis:error", //Make only some warnings fatal: Transform exhaustivity warnings into errors.
-  //"-Xfatal-warnings", // Fail the compilation if there are any warnings.
+  "-Xfatal-warnings", // Fail the compilation if there are any warnings.
 )
 
 javacOptions ++= Seq("-source", releaseJvmVersion, "-target", releaseJvmVersion)
@@ -163,21 +157,7 @@ Docker / daemonUserUid := None
 Compile / packageDoc / publishArtifact := false // speed up building Docker images
 Compile / packageSrc / publishArtifact := false // speed up building Docker images
 dockerUpdateLatest := true
-
 dockerBuildxPlatforms := Seq("linux/amd64")
-
-// docker:publish
-/*dockerBuildCommand := {
-  if (sys.props("os.arch") != "amd64") {
-    // use buildx with platform to build supported amd64 images on other CPU architectures
-    // this may require that you have first run 'docker buildx create' to set docker buildx up
-    dockerExecCommand.value ++ Seq(
-      "buildx",
-      "build",
-      "--platform=linux/amd64",
-      "--load") ++ dockerBuildOptions.value :+ "."
-  } else dockerBuildCommand.value
-}*/
 
 // make version compatible with docker for publishing
 ThisBuild / dynverSeparator := "-"
