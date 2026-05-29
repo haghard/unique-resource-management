@@ -9,6 +9,8 @@ addCommandAlias(
     "-Dakka.persistence.r2dbc.connection-factory.password=secret\n" +
     "-Dakka.remote.artery.canonical.port=2550\n" +
     "-Dakka.remote.artery.canonical.hostname=127.0.0.1\n" +
+    "-DREQ_CONTACT_POINT_VAR=2\n"+
+    "-Dakka.management.cluster.bootstrap.contact-point-discovery.discovery-method=config\n" +
     "-DCONTACT_POINTS=127.0.0.1,127.0.0.2"
 )
 
@@ -24,5 +26,7 @@ addCommandAlias(
     "-Dakka.persistence.r2dbc.connection-factory.password=secret\n" +
     "-Dakka.remote.artery.canonical.port=2550\n" +
     "-Dakka.remote.artery.canonical.hostname=127.0.0.2\n" +
+    "-DREQ_CONTACT_POINT_VAR=2\n"+
+    "-Dakka.management.cluster.bootstrap.contact-point-discovery.discovery-method=config\n" +
     "-DCONTACT_POINTS=127.0.0.1,127.0.0.2"
 )
