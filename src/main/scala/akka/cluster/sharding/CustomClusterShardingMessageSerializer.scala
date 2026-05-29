@@ -49,6 +49,7 @@ final class CustomClusterShardingMessageSerializer(system: ExtendedActorSystem)
   val ShardHomeAllocatedManifest = "AF" // akka.cluster.sharding.ShardCoordinator.Internal.ShardHomeAllocated
   val RegionStoppedManifest      = "BM"
   val ShardHomesManifest         = "BN"
+  val StopShardsManifest         = "ST"
 
   override def toBinary(obj: AnyRef): Array[Byte] =
     obj match {
@@ -104,6 +105,8 @@ final class CustomClusterShardingMessageSerializer(system: ExtendedActorSystem)
             Using.resource(out)(actorRefMessageToProto(shardRegion).writeTo(_))
           case GracefulShutdownReq(shardRegion) =>
             Using.resource(out)(actorRefMessageToProto(shardRegion).writeTo(_))
+          case StopShards(shards) =>
+            Using.resource(out)(stopShards(shards).writeTo(_))
         }
 
       case state: akka.cluster.sharding.ShardCoordinator.Internal.State =>
@@ -158,6 +161,8 @@ final class CustomClusterShardingMessageSerializer(system: ExtendedActorSystem)
         RegionStopped(actorRefMessageFromBinaryBuffer(buf))
       case ShardHomesManifest =>
         shardHomesFromBinary(buf)
+      case StopShardsManifest =>
+        stopShardsFromBinary(buf)
       case _ =>
         // TODO: implement all
         // system.log.warning(s"add fromBinary for {}", manifest)

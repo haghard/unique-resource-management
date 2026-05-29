@@ -63,3 +63,17 @@ message Unassign {
 }
 
 message Passivate {}
+
+message AssignReply {
+  ResponseTag response_tag = 1;
+  ResourceLocation location = 2;
+}
+
+message ReleaseReply {
+  ResponseTag response_tag = 1;
+}
+
+message ReassignReply {
+  ResponseTag response_tag = 1;
+  ResourceLocation location = 2;
+}

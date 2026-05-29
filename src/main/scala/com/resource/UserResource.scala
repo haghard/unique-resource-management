@@ -13,14 +13,13 @@ import com.resource.api.*
 import com.resource.domain.*
 import com.resource.domain.resource.ResourceCmdMessage
 import com.resource.domain.user.*
-import org.slf4j.Logger
 
 import scala.concurrent.duration.*
 
-/** [[UserResourceLink]] Acts as a per-user request latch to prevent concurrent requests from multiple clients. Requests
+/** [[UserResource]] Acts as a per-user request latch to prevent concurrent requests from multiple clients. Requests
   * from different users can be served in parallel.
   */
-object UserResourceLink {
+object UserResource {
 
   val TypeKey: EntityTypeKey[UserCmd] = EntityTypeKey[UserCmd](name = "usr-rs")
 
@@ -50,60 +49,35 @@ object UserResourceLink {
       }
   }
 
-  def apply(
-    entityCtx: EntityContext[UserCmd],
-    uniqueResources: ActorRef[resource.ResourceCmd]
-  ): Behavior[UserCmd] =
+  def apply(entityCtx: EntityContext[UserCmd]): Behavior[UserCmd] =
     Behaviors.setup { implicit ctx =>
-      Behaviors.withTimers { implicit timer =>
-        val userId         = ctx.self.path.elements.last
-        val redeliverAfter =
-          ctx.system.settings.config.getDuration("akka.cluster.sharding.redelivery-interval").toSeconds.seconds
-        implicit val refResolver: ActorRefResolver = ActorRefResolver(ctx.system)
-
-        DurableStateBehavior
-          .withEnforcedReplies[UserCmd, UserResourceState](
-            PersistenceId(TypeKey.name, entityCtx.entityId),
-            UserResourceState(),
-            (state, cmd) => state.applyCmd(userId, cmd, uniqueResources, redeliverAfter)
-          )
-          .receiveSignal {
-            case (state, RecoveryCompleted) =>
-              ctx.log.warn(s"★★★ RecoveryCompleted: ${state.pbState.lockState}")
-              state.redeliver(userId, uniqueResources, redeliverAfter)(timer, ctx.log)
-            case (_, RecoveryFailed(cause)) =>
-              ctx.log.error(s"There is a problem with state recovery $cause", cause)
-          }
-          .onPersistFailure(
-            SupervisorStrategy.restartWithBackoff(minBackoff = 3.seconds, maxBackoff = 10.seconds, randomFactor = 0.3)
-          )
-      }
+      val userId                                 = ctx.self.path.elements.last
+      implicit val refResolver: ActorRefResolver = ActorRefResolver(ctx.system)
+      DurableStateBehavior
+        .withEnforcedReplies[UserCmd, UserResourceState](
+          PersistenceId(TypeKey.name, entityCtx.entityId),
+          UserResourceState(),
+          (state, cmd) => state.applyCmd(userId, cmd)
+        )
+        .receiveSignal {
+          case (state, RecoveryCompleted) =>
+            ctx.log.warn(s"★★★ RecoveryCompleted: ${state.pbState.lockState}")
+          case (_, RecoveryFailed(cause)) =>
+            ctx.log.error(s"There is a problem with state recovery $cause", cause)
+        }
+        .onPersistFailure(
+          SupervisorStrategy.restartWithBackoff(minBackoff = 3.seconds, maxBackoff = 10.seconds, randomFactor = 0.3)
+        )
     }
 
   implicit class UserResourceLinkOps(val pbState: UserResourceState) extends AnyVal {
-
-    def redeliver(
-      userId: String,
-      uniqueResources: ActorRef[resource.ResourceCmd],
-      redeliverAfter: FiniteDuration
-    )(implicit timer: TimerScheduler[UserCmd], logger: Logger): Unit =
-      pbState.lockState.foreach { ls =>
-        uniqueResources.tell(ls.pendingCmd)
-        logger.info("Redeliver {}", ls.pendingCmd)
-        timer.startSingleTimer(userId + "@" + ls.pendingCmd, RedeliveryTick(), redeliverAfter)
-      }
-
     def applyCmd(
       userId: String,
-      cmd: UserCmd,
-      uniqueResources: ActorRef[resource.ResourceCmd],
-      redeliverAfter: FiniteDuration
+      cmd: UserCmd
     )(implicit
       ctx: ActorContext[UserCmd],
-      refResolver: ActorRefResolver,
-      timer: TimerScheduler[UserCmd]
+      refResolver: ActorRefResolver
     ): ReplyEffect[UserResourceState] = {
-      implicit val logger = ctx.log
       cmd match {
         case GetResource(_, replyTo) =>
           pbState.linkedResource match {
@@ -145,9 +119,7 @@ object UserResourceLink {
 
                 case None =>
                   val cmdSeqNum = DurableStateBehavior.lastSequenceNumber(ctx)
-                  ctx.log.warn(
-                    s"Lock [$userId/${ResponseTag.Assigned}/$cmdSeqNum = ${resourceToAssign.uniqueKey}]"
-                  )
+                  ctx.log.warn(s"Lock [$userId/${ResponseTag.Assigned}/$cmdSeqNum = ${resourceToAssign.uniqueKey}]")
                   val pendingCmd =
                     resource.Assign(
                       assign.userId,
@@ -159,10 +131,6 @@ object UserResourceLink {
                   val updatedState = pbState.update(_.lockState := LockState(pendingCmd, grpcClient))
                   Effect
                     .persist(updatedState)
-                    .thenRun { _: UserResourceState =>
-                      uniqueResources.tell(pendingCmd)
-                      timer.startSingleTimer(userId + "@" + cmdSeqNum, RedeliveryTick(), redeliverAfter)
-                    }
                     .thenNoReply()
               }
           }
@@ -194,13 +162,8 @@ object UserResourceLink {
                       )
 
                     val updatedState = pbState.update(_.lockState := LockState(pendingCmd = pc, grpcClient))
-
                     Effect
                       .persist(updatedState)
-                      .thenRun { _: UserResourceState =>
-                        uniqueResources.tell(pc)
-                        timer.startSingleTimer(userId + "@" + cmdSeqNum, RedeliveryTick(), redeliverAfter)
-                      }
                       .thenNoReply()
                   } else {
                     Effect.none
@@ -214,7 +177,7 @@ object UserResourceLink {
                   Effect.none
                     .thenReply(refResolver.resolveActorRef(grpcClient)) { _: UserResourceState =>
                       StatusReply.success(
-                        ResourceReply(userId, ResourceReply.StatusCode.OKNoOp, location)
+                        ResourceReply(userId, ResourceReply.StatusCode.ResourceNotFound, location)
                       )
                     }
               }
@@ -259,10 +222,6 @@ object UserResourceLink {
                       val updatedState = pbState.update(_.lockState := LockState(pc, grpcClient))
                       Effect
                         .persist(updatedState)
-                        .thenRun { _: UserResourceState =>
-                          uniqueResources.tell(pc)
-                          timer.startSingleTimer(userId + "@" + cmdSeqNum, RedeliveryTick(), redeliverAfter)
-                        }
                         .thenNoReply()
                     }
                   } else {
@@ -283,7 +242,7 @@ object UserResourceLink {
               }
           }
 
-        case Confirm(_, resource, location, requestTag, cmdSeqNum, projection) =>
+        case Confirm(_, resource, location, responseTag, cmdSeqNum, projection) =>
           val projectionToReply = refResolver.resolveActorRef(projection)
 
           pbState.lockState match {
@@ -304,7 +263,7 @@ object UserResourceLink {
               if (pendingCmdSeqNum == cmdSeqNum) {
 
                 val (updatedState, statusReply) =
-                  requestTag match {
+                  responseTag match {
                     case ResponseTag.Assigned | ResponseTag.Reassigned =>
                       (
                         pbState.update(
@@ -322,21 +281,23 @@ object UserResourceLink {
                       pbState.clearLockState -> StatusReply.success(
                         ResourceReply(userId, ResourceReply.StatusCode.ReservedByAnotherUser, location)
                       )
-                    case ResponseTag.Unrecognized(_) | ResponseTag.Unspecified =>
-                      pbState -> StatusReply.error("Unknown " + classOf[ResponseTag].getName)
+                    case ResponseTag.Unrecognized(_) | ResponseTag.Unspecified | ResponseTag.AssignAccepted |
+                        ResponseTag.ReassignAccepted | ResponseTag.UnassignAccepted =>
+                      pbState -> StatusReply.error("Unexpected " + classOf[ResponseTag].getName)
                   }
 
+                println("6. UserResource: " + responseTag + " at " + System.currentTimeMillis())
                 Effect
                   .persist(updatedState)
                   .thenRun { _ =>
-                    ctx.log.warn(s"Unlock [$userId/$requestTag/$cmdSeqNum = ${resource.uniqueKey}]")
+                    ctx.log.warn(s"Unlock [$userId/$responseTag/$cmdSeqNum = ${resource.uniqueKey}]")
                     if (projection.nonEmpty) {
                       ctx.log.info(s"Confirm $cmdSeqNum")
                       projectionToReply.tell(StatusReply.success(akka.Done))
                     }
                   }
                   .thenReply(refResolver.resolveActorRef(grpcClient)) { _: UserResourceState =>
-                    ctx.log.info(s"Released ${requestTag.name}-lock / ${updatedState.linkedResource.getOrElse("")}")
+                    ctx.log.info(s"Released ${responseTag.name}-lock / ${updatedState.linkedResource.getOrElse("")}")
                     statusReply
                   }
               } else if (pendingCmdSeqNum > cmdSeqNum) {
@@ -370,9 +331,6 @@ object UserResourceLink {
         case RedeliveryTick() =>
           Effect
             .none[UserResourceState]
-            .thenRun { _ =>
-              pbState.redeliver(userId, uniqueResources, redeliverAfter)
-            }
             .thenNoReply()
 
         case user.Passivate() =>

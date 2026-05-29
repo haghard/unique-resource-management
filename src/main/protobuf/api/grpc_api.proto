@@ -63,7 +63,8 @@ message ResourceReply {
     ReservedByAnotherUser = 3;
     AnotherResourceFound = 4;
     LocationNotFound = 5;
-    UpdateFailure = 6;
-    Aborted = 7;  //cannot serialize access to ...
+    ResourceNotFound = 6;
+    UpdateFailure = 7;
+    Aborted = 8;  //cannot serialize access to ...
   }
 }

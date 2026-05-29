@@ -1,5 +1,5 @@
 
-version := "0.1.1"
+version := "0.2.0"
 scalaVersion := "2.13.18"
 name := "resources"
 
@@ -18,12 +18,39 @@ javaHome := Some(file("/Library/Java/JavaVirtualMachines/jdk-17.jdk/Contents/Hom
 Akka-2.7.0(22.10)
 https://doc.akka.io/reference/release-notes/
 */
+/*
 val AkkaVersion = "2.7.0"
 val AkkaHttpVersion = "10.4.0"
 val AkkaManagementVersion = "1.2.0"
 val AkkaPersistenceJdbcV = "5.2.0"
 val AkkaPersistenceR2dbcVersion = "1.0.1"
 val AkkaProjectionVersion = sys.props.getOrElse("akka-projection.version", "1.3.0")
+*/
+
+/*
+Akka-23.5(2.8.2) May 16, 2023
+https://doc.akka.io/reference/release-notes/2023-05-16-akka-23.5-released.html
+
+Akka (core) 2.8.2
+Akka HTTP 10.5.2
+Akka gRPC 2.3.2
+Akka Management 1.4.0
+Alpakka Kafka 4.0.2
+Alpakka 6.0.1
+Akka Persistence R2DBC 1.1.0 (+)
+Akka Persistence JDBC 5.2.1
+Akka Persistence Cassandra 1.1.1
+Akka Projections 1.4.0
+Akka Diagnostics 2.0.0
+*/
+
+
+val AkkaVersion = "2.8.2"
+val AkkaHttpVersion = "10.5.2"
+val AkkaManagementVersion = "1.4.0"
+val AkkaPersistenceJdbcV = "5.2.1"
+val AkkaPersistenceR2dbcVersion = "1.1.0"
+val AkkaProjectionVersion = sys.props.getOrElse("akka-projection.version", "1.4.0")
 
 //https://mvnrepository.com/artifact/com.lihaoyi/ammonite
 //https://github.com/com-lihaoyi/Ammonite/releases
@@ -55,7 +82,13 @@ libraryDependencies ++= Seq(
 
   "com.lightbend.akka" %% "akka-persistence-r2dbc" % AkkaPersistenceR2dbcVersion,
 
-  "com.lightbend.akka" %% "akka-projection-r2dbc" % AkkaPersistenceR2dbcVersion, //AkkaProjectionVersion
+
+  //"com.lightbend.akka" %% "akka-projection-durable-state" % "1.4.0", //May 11, 2023
+  "com.lightbend.akka" %% "akka-projection-durable-state" % "1.4.1",  //May 30, 2023
+  //https://repo.akka.io/bj7KwaUIoiozNSjYcwmp1pk9o5WhYsitN1fNp_NQiICNhEm2/secure/com/lightbend/akka/akka-projection-durable-state_2.13/1.4.2/
+
+
+  "com.lightbend.akka" %% "akka-projection-r2dbc" % AkkaProjectionVersion, // AkkaPersistenceR2dbcVersion, //AkkaProjectionVersion
   "com.lightbend.akka" %% "akka-projection-eventsourced" % AkkaProjectionVersion,
 
   "org.hdrhistogram" % "HdrHistogram" % "2.2.2",
@@ -81,14 +114,14 @@ Compile / scalacOptions ++= Seq(
   "-Wconf:msg=lambda-parens:s",
   "-Xlog-reflective-calls",
   "-Xlint",
-  "-Vtype-diffs",
+  //"-Vtype-diffs",
   "-Xmigration", //Emit migration warnings under -Xsource:3 as fatal warnings, not errors; -Xmigration disables fatality (#10439 by @som-snytt, #10511)
   "-Vimplicits", // makes the compiler print implicit resolution chains when no implicit value can be found
   "-Ylog-classpath", //log classpath
   s"-Wconf:src=${(Compile / target).value}/scala-2.13/akka-grpc/.*:silent",
   "-Wconf:msg=Marked as deprecated in proto file:silent",
   //"-Wconf:cat=other-match-analysis:error", //Make only some warnings fatal: Transform exhaustivity warnings into errors.
-  "-Xfatal-warnings", // Fail the compilation if there are any warnings.
+  //"-Xfatal-warnings", // Fail the compilation if there are any warnings.
 )
 
 javacOptions ++= Seq("-source", releaseJvmVersion, "-target", releaseJvmVersion)
@@ -131,10 +164,10 @@ Compile / packageDoc / publishArtifact := false // speed up building Docker imag
 Compile / packageSrc / publishArtifact := false // speed up building Docker images
 dockerUpdateLatest := true
 
-//dockerBuildxPlatforms := Seq("linux/amd64")
+dockerBuildxPlatforms := Seq("linux/amd64")
 
 // docker:publish
-dockerBuildCommand := {
+/*dockerBuildCommand := {
   if (sys.props("os.arch") != "amd64") {
     // use buildx with platform to build supported amd64 images on other CPU architectures
     // this may require that you have first run 'docker buildx create' to set docker buildx up
@@ -144,7 +177,7 @@ dockerBuildCommand := {
       "--platform=linux/amd64",
       "--load") ++ dockerBuildOptions.value :+ "."
   } else dockerBuildCommand.value
-}
+}*/
 
 // make version compatible with docker for publishing
 ThisBuild / dynverSeparator := "-"

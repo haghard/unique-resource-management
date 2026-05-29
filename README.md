@@ -55,7 +55,7 @@ Client1 `Update(user=2, from=x, to=y)` <> Client2 `Update(user=2, from=x, to=z)`
 
 ## Requirements
  
-✅ Application correctness and low latency for all supported operations.
+✅ Application correctness.
 
 ✅ Clients are able to order their own operations and provide a globally unique ID (`user_id`).
 
@@ -117,8 +117,8 @@ Conflict #1: `OwnerId(1)` attempt to update definition=`aa` to definition=`bb` f
 ```
 grpcurl -d '{"resource":{"name":"aa","version":1},"user_id":"211367c3-9ad3-47ef-a6b0-784d52c96486"}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Assign
 
-grpcurl -d '{"resource":{"name":"bb","version":1},"userId":"211367c3-9ad3-47ef-a6b0-784d52c96486","location":{"bucketId":"7589125186702523474","seqNum":"1"}}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Reassign
-grpcurl -d '{"resource":{"name":"bb","version":1},"userId":"211367c3-9ad3-47ef-a6b0-784d52c96486","location":{"bucketId":"7589125186702523474","seqNum":"1"}}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Reassign
+grpcurl -d '{"resource":{"name":"bb","version":1},"userId":"211367c3-9ad3-47ef-a6b0-784d52c96486","location":{"bucketId":"7589125186702523474","seqNum":"0"}}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Reassign
+grpcurl -d '{"resource":{"name":"bb","version":1},"userId":"211367c3-9ad3-47ef-a6b0-784d52c96486","location":{"bucketId":"7589125186702523474","seqNum":"0"}}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Reassign
  
 ```
 
@@ -131,8 +131,8 @@ Conflict #2:
 
 grpcurl -d '{"resource":{"name":"ccf64567868","version":1},"user_id":"211367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Assign
 
-grpcurl -d '{"resource":{"name":"ccf64567868a","version":1},"userId":"211367c3-9ad3-47ef-a6b0-784d52c96489","location":{"bucketId":"2611229345306089543","seqNum":"1"}}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Reassign
-grpcurl -d '{"resource":{"name":"ccf64567868b","version":1},"userId":"211367c3-9ad3-47ef-a6b0-784d52c96489","location":{"bucketId":"2611229345306089543","seqNum":"1"}}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Reassign
+grpcurl -d '{"resource":{"name":"ccf64567868a","version":1},"userId":"211367c3-9ad3-47ef-a6b0-784d52c96489","location":{"bucketId":"2611229345306089543","seqNum":"0"}}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Reassign
+grpcurl -d '{"resource":{"name":"ccf64567868b","version":1},"userId":"211367c3-9ad3-47ef-a6b0-784d52c96489","location":{"bucketId":"2611229345306089543","seqNum":"0"}}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Reassign
 
 `OwnerId(1)` attempt to update resource to `resource=a` and `resource=b` at the same time from different clients
 
@@ -179,13 +179,14 @@ grpcurl -d '{"resource":{"name":"b","version":1},"userId":"211367c3-9ad3-47ef-a6
 ### Other examples
 
 ```
-grpcurl -d '{"resource":{"name":"a1","version":2},"user_id":"211367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Assign
-grpcurl -d '{"resource":{"name":"b1","version":2},"userId":"211367c3-9ad3-47ef-a6b0-784d52c96489","location":{"bucketId":"1421668664688993487","seqNum":"0"}}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Reassign
-grpcurl -d '{"resource":{"name":"c1","version":2},"userId":"211367c3-9ad3-47ef-a6b0-784d52c96489","location":{"bucketId":"5395919907386521286","seqNum":"0"}}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Reassign
-grpcurl -d '{"resource":{"name":"d1","version":2},"userId":"211367c3-9ad3-47ef-a6b0-784d52c96489","location":{"bucketId":"591900785108084723","seqNum":"0"}}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Reassign
-grpcurl -d '{"resource":{"name":"e1","version":2},"userId":"211367c3-9ad3-47ef-a6b0-784d52c96489","location":{"bucketId":"-4373920888234706083","seqNum":"0"}}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Reassign
 
-grpcurl -d '{"location":{"bucketId":"5800016335066854875","seqNum":0},"user_id":"211367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.2:8080 com.resource.api.ResourceService/Release
+grpcurl -d '{"resource":{"name":"x1","version":2},"user_id":"211367c3-9ad3-47ef-a6b0-784d52c96492"}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Assign
+grpcurl -d '{"resource":{"name":"b1","version":2},"userId":"211367c3-9ad3-47ef-a6b0-784d52c96492","location":{"bucketId":"-8081860899035392800","seqNum":"0"}}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Reassign
+grpcurl -d '{"resource":{"name":"c1","version":2},"userId":"211367c3-9ad3-47ef-a6b0-784d52c96492","location":{"bucketId":"5395919907386521286","seqNum":"0"}}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Reassign
+grpcurl -d '{"resource":{"name":"d1","version":2},"userId":"211367c3-9ad3-47ef-a6b0-784d52c96492","location":{"bucketId":"591900785108084723","seqNum":"0"}}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Reassign
+grpcurl -d '{"resource":{"name":"e1","version":2},"userId":"211367c3-9ad3-47ef-a6b0-784d52c96492","location":{"bucketId":"-4373920888234706083","seqNum":"0"}}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Reassign
+
+grpcurl -d '{"location":{"bucketId":"5800016335066854875","seqNum":0},"user_id":"211367c3-9ad3-47ef-a6b0-784d52c96492"}' -plaintext 127.0.0.2:8080 com.resource.api.ResourceService/Release
 
 
 grpcurl -d '{"userId":"211367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/GetResource
@@ -193,8 +194,6 @@ grpcurl -d '{"location":{"bucketId":"-4373920888234706083","seqNum": "1"},"user_
 
 
 grpcurl -d '{"userId":"211367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/GetResource
-
-grpcurl -d '{"resource":{"name":"a","version":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"user_id":"211367c3-9ad3-47ef-a6b0-784d52c96481" }' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Allocate
 
 ```
 
@@ -236,8 +235,7 @@ kubectl delete pod <pod-name>
 
 
 ### Drop all tcp traffic to simulate split brain
-````
-
+```
 kubectl --kubeconfig=./kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml exec -it resources-64bb48b97d-r99bz -- /bin/sh
 
 iptables -A INPUT -p tcp -j DROP
@@ -245,3 +243,7 @@ iptables -A INPUT -p tcp -j DROP
 iptables -D INPUT -p tcp -j DROP`
 
 ```
+
+### Links  
+  https://doc.akka.io/libraries/akka-projection/current/durable-state.html
+  https://doc.akka.io/libraries/akka-core/current/typed/index-persistence-durable-state.html

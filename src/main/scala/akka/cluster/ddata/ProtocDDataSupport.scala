@@ -5,10 +5,11 @@ import akka.cluster.{Member, UniqueAddress}
 import akka.cluster.ddata.Replicator.Internal.*
 import akka.cluster.ddata.protobuf.SerializationSupport
 import akka.cluster.ddata.protobuf.msg.ReplicatorMessages as dm
-import akka.cluster.sharding.ShardCoordinator.Internal.{ShardHome, ShardHomeAllocated, ShardHomes, State}
+import akka.cluster.sharding.ShardCoordinator.Internal.{ShardHome, ShardHomeAllocated, ShardHomes, State, StopShards}
 import akka.remote.ByteStringUtils
 import akka.serialization.Serialization
 import akka.util.ByteString as AkkaByteString
+import akka.cluster.sharding.protobuf.msg.ClusterShardingMessages as sm
 
 import java.nio.ByteBuffer
 import scala.collection.immutable
@@ -55,9 +56,9 @@ trait ProtocDDataSupport extends SerializationSupport {
         dm.Status.Entry
           .newBuilder()
           .setKey(key)
-          .setDigest(ByteStringUtils.toProtoByteStringUnsafe(digest.toArrayUnsafe()))
-          /*.setDigest(ByteStringUtils.toProtoByteStringUnsafe(digest._1.toArrayUnsafe()))
-          .setUsedTimestamp(digest._2)*/
+          // .setDigest(ByteStringUtils.toProtoByteStringUnsafe(digest.toArrayUnsafe()))
+          .setDigest(ByteStringUtils.toProtoByteStringUnsafe(digest._1.toArrayUnsafe()))
+          .setUsedTimestamp(digest._2)
       )
     }
     status.toSystemUid.foreach(b.setToSystemUid) // can be None when sending back to a node of version 2.5.21
@@ -87,12 +88,12 @@ trait ProtocDDataSupport extends SerializationSupport {
     val fromSystemUid = if (status.hasFromSystemUid) Some(status.getFromSystemUid) else None
 
     Status(
-      /*status.getEntriesList.asScala.iterator.map { e =>
+      status.getEntriesList.asScala.iterator.map { e =>
         e.getKey -> (AkkaByteString.fromArrayUnsafe(e.getDigest.toByteArray()) -> e.getUsedTimestamp)
-      }.toMap,*/
-      status.getEntriesList.asScala.iterator
+      }.toMap,
+      /*status.getEntriesList.asScala.iterator
         .map(e => e.getKey -> AkkaByteString.fromArrayUnsafe(e.getDigest.toByteArray()))
-        .toMap,
+        .toMap,*/
       status.getChunk,
       status.getTotChunks,
       toSystemUid,
@@ -136,8 +137,8 @@ trait ProtocDDataSupport extends SerializationSupport {
     val fromSystemUid = if (gossip.hasFromSystemUid) Some(gossip.getFromSystemUid) else None
     Gossip(
       gossip.getEntriesList.asScala.iterator
-        .map(e => e.getKey -> dataEnvelopeFromProto(e.getEnvelope))
-        // .map(e => e.getKey -> (dataEnvelopeFromProto(e.getEnvelope) -> e.getUsedTimestamp))
+        // .map(e => e.getKey -> dataEnvelopeFromProto(e.getEnvelope))
+        .map(e => e.getKey -> (dataEnvelopeFromProto(e.getEnvelope) -> e.getUsedTimestamp))
         .toMap,
       sendBack = gossip.getSendBack,
       toSystemUid,
@@ -152,9 +153,9 @@ trait ProtocDDataSupport extends SerializationSupport {
         dm.Gossip.Entry
           .newBuilder()
           .setKey(key)
-          .setEnvelope(dataEnvelopeToProto(data))
-          // .setEnvelope(dataEnvelopeToProto(data._1))
-          // .setUsedTimestamp(data._2)
+          // .setEnvelope(dataEnvelopeToProto(data))
+          .setEnvelope(dataEnvelopeToProto(data._1))
+          .setUsedTimestamp(data._2)
       )
     }
     gossip.toSystemUid.foreach(b.setToSystemUid)
@@ -236,7 +237,6 @@ trait ProtocDDataSupport extends SerializationSupport {
     b.build()
   }
 
-  import akka.cluster.sharding.protobuf.msg.ClusterShardingMessages as sm
   def coordinatorStateFromProto(state: sm.CoordinatorState): State = {
     val shards: Map[String, ActorRef] =
       state.getShardsList.asScala.toVector.iterator.map { entry =>
@@ -371,6 +371,19 @@ trait ProtocDDataSupport extends SerializationSupport {
       uniqueAddressFromProto(pruningStatePB.getOwnerAddress),
       pruningStatePB.getSeenList.asScala.iterator.map(addressFromProto).to(immutable.Set)
     )
+  }
+
+  def stopShards(ss: Set[String]): akka.cluster.sharding.protobuf.msg.ClusterShardingMessages.StopShards = {
+    val b = sm.StopShards.newBuilder()
+    ss.foreach { s =>
+      b.addShards(s)
+    }
+    b.build()
+  }
+
+  def stopShardsFromBinary(buf: ByteBuffer): StopShards = {
+    val proto = sm.StopShards.parseFrom(buf)
+    StopShards(proto.getShardsList.asScala.toSet)
   }
 
   /*def voteEnvelopeStateToProto(

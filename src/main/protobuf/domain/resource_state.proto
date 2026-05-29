@@ -35,4 +35,7 @@ enum ResponseTag {
   Unassigned = 2;
   Reassigned = 3;
   ReservedByAnotherUser = 4;
+  AssignAccepted = 5;
+  ReassignAccepted = 6;
+  UnassignAccepted = 7;
 }

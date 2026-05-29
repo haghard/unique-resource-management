@@ -11,7 +11,6 @@ import akka.persistence.typed.scaladsl.*
 
 import scala.concurrent.duration.DurationInt
 import com.resource.domain.*
-import com.resource.domain.user.Confirm
 import Implicits.*
 import com.resource.domain.resource.*
 
@@ -62,7 +61,7 @@ object TakenUniqueResource {
           (state, cmd) => state.applyCmd(cmd, entityId),
           (state, event) => state.applyEvt(event)
         )
-        .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = snapshotEveryNEvents, keepNSnapshots = 2))
+        .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = snapshotEveryNEvents, keepNSnapshots = 1))
         .receiveSignal {
           case (state, RecoveryCompleted) =>
             ctx.log.warn(s"★★★ RecoveryCompleted: - ${state.contentKeySeqNum.size}")
@@ -88,9 +87,9 @@ object TakenUniqueResource {
     ): ReplyEffect[ResourceEvent, TakenResourceState] =
       cmd match {
         case resource.Assign(userId, resource, pendingCmdSeqNum, replyTo) =>
-          val userResourceLinkRef = resolver.resolveActorRef(replyTo)
-          ctx.log.info(s"★★★ Assign(${resource.uniqueKey}), user:$userId / $userResourceLinkRef")
-          // Thread.sleep(800) // for local testing
+          val stateProj = resolver.resolveActorRef(replyTo)
+          ctx.log.info(s"★★★ Assign(${resource.uniqueKey}), user:$userId")
+          // Thread.sleep(500) // for local testing
 
           /*if (scala.util.Random.nextDouble() < .6) {
             Effect.none
@@ -100,41 +99,25 @@ object TakenUniqueResource {
 
           pbState.contentKeySeqNum.get(resource.uniqueKey) match {
             case Some(seqNum) =>
-
-              /*
-
-              Effect.none
-                .thenRun { _: TakenResourceState =>
-                  ClusterSharding(ctx.system).entityRefFor(UserResourceLink.TypeKey, userId)
-                }
-                .thenNoReply()*/
+              val responseTag =
+                if (pbState.userId.exists(_ == userId)) ResponseTag.Assigned else ResponseTag.ReservedByAnotherUser
 
               Effect.none
-                .thenReply(userResourceLinkRef) { _: TakenResourceState =>
-                  val responseTag =
-                    if (pbState.userId.exists(_ == userId)) ResponseTag.Assigned
-                    else ResponseTag.ReservedByAnotherUser
-                  Confirm(
-                    userId,
-                    resource,
-                    ResourceLocation(entityId, seqNum),
-                    responseTag,
-                    pendingCmdSeqNum
-                  )
-                }
+                .thenReply(stateProj)(_ =>
+                  com.resource.domain.resource.AssignReply(responseTag, Some(ResourceLocation(entityId, seqNum)))
+                )
 
             case None =>
+              println("2. TakenUniqueResource:  Assigned  at " + System.currentTimeMillis())
               val eventSeqNum = EventSourcedBehavior.lastSequenceNumber(ctx)
               Effect
                 .persist(Assigned(userId, resource, eventSeqNum, None, pendingCmdSeqNum))
-                .thenRun { _: TakenResourceState =>
-                  ctx.log.info(s"User:$userId assigned ${resource.uniqueKey}")
-                }
-                .thenNoReply()
+                .thenReply(stateProj)(_ => com.resource.domain.resource.AssignReply(ResponseTag.AssignAccepted, None))
           }
 
         case resource.Release(userId, releasedResource, releasedLocation, pendingCmdSeqNum, replyTo) =>
           ctx.log.info(s"★★★ Release(${releasedResource.uniqueKey}), user:$userId")
+          val stateProj = resolver.resolveActorRef(replyTo)
           pbState.contentKeySeqNum.collectFirst {
             case (_, seqNum) if seqNum == releasedLocation.seqNum => seqNum
           } match {
@@ -151,41 +134,35 @@ object TakenUniqueResource {
                 .thenRun { _: TakenResourceState =>
                   ctx.log.info(s"★★★ Got Release(${releasedResource.uniqueKey}), user:$userId")
                 }
-                .thenNoReply()
+                .thenReply(stateProj)(_ => ReleaseReply(ResponseTag.UnassignAccepted))
 
             case None =>
-              val userResourceLinkRef = resolver.resolveActorRef(replyTo)
               Effect.none
-                .thenReply(userResourceLinkRef) { _: TakenResourceState =>
-                  Confirm(userId, releasedResource, releasedLocation, ResponseTag.Unassigned, pendingCmdSeqNum)
+                .thenReply(stateProj) { _: TakenResourceState =>
+                  ReleaseReply(ResponseTag.Unassigned)
                 }
           }
 
         case resource.Reassign(userId, resource, releasedLocation, pendingCmdSeqNum, replyTo) =>
-          val userResourceLinkRef = resolver.resolveActorRef(replyTo)
+          val stateProj = resolver.resolveActorRef(replyTo)
           ctx.log.info(s"★★★ Reassign(${resource.uniqueKey}), user:$userId")
+          // Thread.sleep(500) // for local testing
           pbState.contentKeySeqNum.get(resource.uniqueKey) match {
             case Some(seqNum) =>
               Effect.none
-                .thenReply(userResourceLinkRef) { _: TakenResourceState =>
+                .thenReply(stateProj) { _: TakenResourceState =>
                   val responseTag =
                     if (pbState.userId.exists(_ == userId)) ResponseTag.Reassigned
                     else ResponseTag.ReservedByAnotherUser
 
-                  Confirm(
-                    userId,
-                    resource,
-                    ResourceLocation(entityId, seqNum),
-                    responseTag,
-                    pendingCmdSeqNum
-                  )
+                  com.resource.domain.resource.ReassignReply(responseTag, Some(ResourceLocation(entityId, seqNum)))
                 }
 
             case None =>
               val eventSeqNum = EventSourcedBehavior.lastSequenceNumber(ctx)
               Effect
                 .persist(Assigned(userId, resource, eventSeqNum, Some(releasedLocation), pendingCmdSeqNum))
-                .thenNoReply()
+                .thenReply(stateProj)(_ => com.resource.domain.resource.ReassignReply(ResponseTag.ReassignAccepted))
           }
 
         case resource.Unassign(
@@ -284,6 +261,7 @@ object TakenUniqueResource {
               pbState
           }
 
+        // case _: AssignConflicted => pbState
         case com.resource.domain.resource.ResourceEvent.Empty =>
           pbState
       }

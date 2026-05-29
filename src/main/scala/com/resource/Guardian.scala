@@ -4,6 +4,7 @@ import akka.actor.RootActorPath
 import akka.actor.typed.scaladsl.adapter.TypedActorSystemOps
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.*
+import akka.actor.typed.scaladsl.AskPattern.Askable
 import akka.cluster.ddata.SelfUniqueAddress
 import akka.cluster.sharding.typed.ClusterShardingSettings
 import akka.cluster.sharding.typed.scaladsl.*
@@ -33,10 +34,10 @@ object Guardian {
   def apply(buildVersion: String, grpcPort: Int): Behavior[Nothing] =
     Behaviors
       .setup[Protocol] { implicit ctx =>
-        implicit val system                     = ctx.system
-        implicit val timeout: akka.util.Timeout = akka.util.Timeout(4.seconds)
-        implicit val cluster                    = akka.cluster.typed.Cluster(system)
-        implicit val selfUniqueAddress          = SelfUniqueAddress(cluster.selfMember.uniqueAddress)
+        implicit val system            = ctx.system
+        implicit val timeout           = akka.util.Timeout(6.seconds)
+        implicit val cluster           = akka.cluster.typed.Cluster(system)
+        implicit val selfUniqueAddress = SelfUniqueAddress(cluster.selfMember.uniqueAddress)
 
         val selfAddress = selfUniqueAddress.uniqueAddress.address
         ctx.log.warn("★ ★ ★  SelfUp: {}  ★ ★ ★", selfUniqueAddress)
@@ -116,19 +117,25 @@ object Guardian {
                     .withAllocationStrategy(utils.newLeastShardAllocationStrategy())
                 )
 
+            // https://doc.akka.io/libraries/akka-core/current/typed/index-persistence-durable-state.html
             val userResource: ActorRef[UserCmd] =
               clusterSharding
                 .init(
-                  Entity(UserResourceLink.TypeKey)(UserResourceLink(_, resources))
-                    .withMessageExtractor(UserResourceLink.Extractor(shardingSettings.numberOfShards))
+                  Entity(UserResource.TypeKey)(UserResource(_ /*, resources*/ ))
+                    .withMessageExtractor(UserResource.Extractor(shardingSettings.numberOfShards))
                     .withStopMessage(com.resource.domain.user.Passivate())
                     .withAllocationStrategy(utils.newLeastShardAllocationStrategy())
                 )
 
             val numberOfResourceUserTables = system.settings.config.getInt("number-of-resource-tables")
-            val numberOfProjSlices         = system.settings.config.getInt("akka.projection.r2dbc.number-of-slices")
+            val numberOfSlices             = system.settings.config.getInt("akka.projection.r2dbc.number-of-slices")
 
-            // Looks up the replicator that is being used by [[akka.cluster.sharding.DDataShardCoordinator]]
+            /*
+               3 ddata replicators in total
+               "system" / "clusterReceptionist" / "replicator"
+               "system" / "ddataReplicator"
+               "system" / "sharding" / replicator
+             */
             val dDataShardReplicatorPath =
               RootActorPath(system.deadLetters.path.address) / "system" / "sharding" / "replicator"
 
@@ -140,9 +147,12 @@ object Guardian {
                   .shardingStateChanges(dDataShardReplicator, cluster.selfMember.address.host.getOrElse("local"))
               }(system.executionContext)
 
-            val resourceTables: Vector[String] =
+            val resourceByUserTables: Vector[String] =
               (0 until numberOfResourceUserTables).map(i => s"resource_user$i").toVector
-            ResourceProjection.run(resources, userResource, numberOfProjSlices, resourceTables)
+
+            val askTimeout = 4.seconds
+            TakenUniqueResourceProjection.run(resources, userResource, numberOfSlices, resourceByUserTables, askTimeout)
+            UserResourceLinkProjection.run(resources, userResource, numberOfSlices, askTimeout)
             Bootstrap.run(userResource, selfAddress.host.get, grpcPort)
             Behaviors.same
           }
