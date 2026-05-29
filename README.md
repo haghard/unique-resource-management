@@ -204,10 +204,6 @@ Another similar domain and use cases:
    * vehicles renting
    * students and course subscriptions
 
-
-
-grpcurl -d '{"resource":{"name":"a","version":1},"user_id":"211367c3-9ad3-47ef-a6b0-784d52c96482" }' -plaintext 174.138.113.57:8080 com.resource.api.ResourceService/Assign
-
 ```
 
                      
