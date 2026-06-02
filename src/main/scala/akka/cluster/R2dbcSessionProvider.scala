@@ -34,7 +34,7 @@ final class R2dbcSessionProvider private (connectionFactory: ConnectionFactory, 
       val trxId = UUID.randomUUID()
       val f0    =
         for {
-          _ <- toFuture(con.beginTransaction(PostgresTransactionDefinition.from(IsolationLevel.READ_COMMITTED)))
+          _ <- toFuture(con.beginTransaction(PostgresTransactionDefinition.from(IsolationLevel.REPEATABLE_READ)))
           _ = log.info(s"R2dbc 1.$trxId begin $desc")
           result <- action(new R2dbcSession(con))
           _      <- toFuture(con.commitTransaction())

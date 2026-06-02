@@ -34,7 +34,6 @@ object Guardian {
     Behaviors
       .setup[Protocol] { implicit ctx =>
         implicit val system            = ctx.system
-        implicit val timeout           = akka.util.Timeout(6.seconds)
         implicit val cluster           = akka.cluster.typed.Cluster(system)
         implicit val selfUniqueAddress = SelfUniqueAddress(cluster.selfMember.uniqueAddress)
 
@@ -56,10 +55,8 @@ object Guardian {
           .receive[Protocol] { case (ctx, _ @Protocol.ClusterViewAfterSelfUp(membersByAge)) =>
             cluster.subscriptions ! akka.cluster.typed.Unsubscribe(ctx.self)
 
-            /*val serialization = SerializationExtension(system)
-            serialization.serializerOf(classOf[akka.remote.serialization.ProtobufSerializer].getName).map(_.identifier)*/
-
-            ctx.log.warn("★ ★ ★  Up: [{}]  ★ ★ ★", membersByAge.mkString(","))
+            val logger = ctx.log
+            logger.warn("★ ★ ★  Up: [{}]  ★ ★ ★", membersByAge.mkString(","))
 
             // ClusterSingleton and ShardCoordinator run on the oldest member in the cluster
             membersByAge.headOption.foreach { shardCoordinator =>
@@ -67,10 +64,12 @@ object Guardian {
               val jvmInfo    =
                 s"Cores:${jvmRuntime.availableProcessors()} Memory:[Max=${jvmRuntime.maxMemory() / 1000000}Mb, Free=${jvmRuntime.freeMemory() / 1000000}Mb]"
 
-              ctx.log.info(
+              logger.info(
                 s"""
                    |--------------------------------------------------------------------------------
                    |ver($buildVersion)
+                   |SBR:${system.settings.config
+                    .getString("akka.cluster.split-brain-resolver.lease-majority.lease-implementation")}
                    |Member:${cluster.selfMember.details}🧪ShardCoordinator:${shardCoordinator.details}🧪Leader:[${cluster.state.leader
                     .getOrElse("")}]
                    |${shardCoordinator.singletonInfo}
@@ -97,11 +96,22 @@ object Guardian {
               )
 
               if (cluster.selfMember.appVersion.compareTo(shardCoordinator.appVersion) > 0)
-                ctx.log.info(
+                logger.info(
                   "★ ★ ★  Rolling update from {} to {}  ★ ★ ★",
                   shardCoordinator.appVersion,
                   cluster.selfMember
                 )
+
+              /*if (cluster.selfMember.uniqueAddress == shardCoordinator.uniqueAddress) {
+                system.scheduler.scheduleOnce(
+                  1.minute,
+                  { () =>
+                    val pid = ProcessHandle.current().pid()
+                    logger.warn(s"★ ★ ★ kill -stop ${pid} ★ ★ ★")
+                    ps.killStop(pid)
+                  }
+                )(system.executionContext)
+              }*/
             }
 
             val shardingSettings = ClusterShardingSettings(system)
@@ -110,7 +120,7 @@ object Guardian {
             val resources: ActorRef[ResourceCmd] =
               clusterSharding
                 .init(
-                  Entity(TakenUniqueResource.TypeKey)(TakenUniqueResource(_, 10))
+                  Entity(TakenUniqueResource.TypeKey)(TakenUniqueResource(_, snapshotEveryNEvents = 10))
                     .withMessageExtractor(TakenUniqueResource.Extractor(shardingSettings.numberOfShards))
                     .withStopMessage(com.resource.domain.resource.Passivate())
                     .withAllocationStrategy(utils.newLeastShardAllocationStrategy())
@@ -120,7 +130,7 @@ object Guardian {
             val userResource: ActorRef[UserCmd] =
               clusterSharding
                 .init(
-                  Entity(UserResource.TypeKey)(UserResource(_ /*, resources*/ ))
+                  Entity(UserResource.TypeKey)(UserResource(_))
                     .withMessageExtractor(UserResource.Extractor(shardingSettings.numberOfShards))
                     .withStopMessage(com.resource.domain.user.Passivate())
                     .withAllocationStrategy(utils.newLeastShardAllocationStrategy())
@@ -130,7 +140,13 @@ object Guardian {
             val numberOfSlices             = system.settings.config.getInt("akka.projection.r2dbc.number-of-slices")
 
             /*
-               replicators
+              /system/sharding/rsCoordinator
+              /system/sharding/usr-rsCoordinator
+              /system/sharding/sharded-daemon-process-rs-projCoordinator
+              /system/sharding/sharded-daemon-process-usr-rs-projCoordinator
+              /system/singletonManagerShardedDaemonProcessCoordinator-rs-proj
+
+               Replicator paths
                "system" / "clusterReceptionist" / "replicator"
                "system" / "ddataReplicator"
                "system" / "sharding" / replicator
@@ -152,7 +168,8 @@ object Guardian {
             val askTimeout = 4.seconds
             TakenUniqueResourceProjection.run(resources, userResource, numberOfSlices, resourceByUserTables, askTimeout)
             UserResourceLinkProjection.run(resources, userResource, numberOfSlices, askTimeout)
-            Bootstrap.run(userResource, selfAddress.host.get, grpcPort)
+
+            Bootstrap.run(userResource, selfAddress.host.get, grpcPort)(system, akka.util.Timeout(6.seconds))
             Behaviors.same
           }
       }

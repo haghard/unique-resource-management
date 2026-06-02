@@ -22,7 +22,7 @@ object utils {
     leastShardAllocationNew
   }
   // ShardCoordinator.Internal.State comes from akka.cluster.sharding.DDataShardCoordinator
-  // all ShardCoordinator keys: rsCoordinatorState, usr-rsCoordinatorState, sharded-daemon-process-rs-projCoordinatorState, sharded-daemon-process-usr-rs-projCoordinatorState
+  // all ShardCoordinator keys: [rsCoordinatorState, usr-rsCoordinatorState, sharded-daemon-process-rs-projCoordinatorState, sharded-daemon-process-usr-rs-projCoordinatorState]
   val CoordinatorStateKey =
     LWWRegisterKey[ShardCoordinator.Internal.State](s"${TakenUniqueResource.TypeKey.name}CoordinatorState")
 

@@ -1,5 +1,5 @@
 
-version := "0.2.1"
+version := "0.3.5"
 scalaVersion := "2.13.18"
 name := "resources"
 
@@ -72,7 +72,7 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka.management" %%  "akka-lease-kubernetes"             % AkkaManagementVersion,
   "com.lightbend.akka.discovery"  %%  "akka-discovery-kubernetes-api"     % AkkaManagementVersion,
 
-  "ch.qos.logback" % "logback-classic" % "1.5.32",
+  "ch.qos.logback" % "logback-classic" % "1.5.34",
   "org.slf4j"      % "slf4j-api"       %  "2.0.18",
 
   "io.aeron" % "aeron-driver" % "1.46.9", //1.47.0
@@ -85,6 +85,15 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka" %% "akka-projection-r2dbc" % AkkaProjectionVersion,
   "com.lightbend.akka" %% "akka-projection-eventsourced" % AkkaProjectionVersion,
 
+  "com.typesafe.akka" %% "akka-coordination" % AkkaVersion,
+
+  //https://mvnrepository.com/artifact/com.lightbend.akka/akka-projection-durable-state_3/1.4.1 May 30, 2023
+  "com.lightbend.akka" %% "akka-projection-durable-state" % "1.4.1",
+
+  //https://mvnrepository.com/artifact/com.lightbend.akka.management/akka-rolling-update-kubernetes_3/1.4.1 //May 25, 2023
+  //https://doc.akka.io/libraries/akka-management/current/rolling-updates.html
+  //"com.lightbend.akka.management" %% "akka-rolling-update-kubernetes" % "1.4.1",
+  
   "org.hdrhistogram" % "HdrHistogram" % "2.2.2",
   "com.lihaoyi" % "ammonite" % AmmoniteVersion % "test" cross CrossVersion.full
 )

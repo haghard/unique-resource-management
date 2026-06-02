@@ -15,12 +15,13 @@ This app needs to support the following operations:
 
 `Unassign(user, resource_location)`
 
-`Reassign(user, prev_resource_location, new_resource)`
+`Reassign(user, prev_resource_location, new_resource)` - resource ownership transfer
 
 across many client and users. App level invariant we want to obtain: Each unique resource belongs to exactly one user at any point in time.
 Resources are not permanently assigned; even after assignment to a user, they can be reassigned to another user.
 External clients are outside our control; therefore, concurrent requests must be handled defensively.
 For example, the following sequence of operations breaks our application level invariant.
+
 
 ```
 
@@ -80,9 +81,9 @@ sbt b
 
 grpcurl -plaintext 127.0.0.1:8080 list
 
-http GET 127.0.0.1:8079/resources/cluster/members
-http GET 127.0.0.2:8079/resources/cluster/shards/usr-rs
-http GET 127.0.0.2:8079/resources/cluster/shards/rs
+http GET 127.0.0.1:8558/cluster/members
+http GET 127.0.0.2:8558/cluster/shards/usr-rs
+http GET 127.0.0.2:8079/cluster/shards/rs
 
 ```
 
@@ -252,6 +253,42 @@ iptables -D INPUT -p udp -j DROP
 
 ```
 
-### Links  
+
+###
+
+http GET :8558/cluster/members
+
+Find the PID for the unreachable node:
+> lsof -i :2550 | grep LISTEN | awk '{print $2}'
+
+
+> sudo lsof -i -P -n | grep <port number>
+> sudo lsof -i :80
+
+or
+
+> ps -ef | grep sbt-launch.jar
+
+
+
+Hard kill
+> kill -9 <pid>
+
+Suspend
+> kill -stop <pid>
+
+Resume
+> kill -cont <pid>
+
+curl -w '\n' -X PUT -H 'Content-Type: multipart/form-data' -F operation=down http://192.168.0.30:8079/fsa/cluster/members/fsa@192.168.0.3:2551
+
+curl -w '\n' -X PUT -H 'Content-Type: multipart/form-data' -F operation=leave http://192.168.0.30:8079/fsa/cluster/members/fsa@192.168.0.3:2551
+
+
+
+
+### Links
+
   https://doc.akka.io/libraries/akka-projection/current/durable-state.html
+
   https://doc.akka.io/libraries/akka-core/current/typed/index-persistence-durable-state.html

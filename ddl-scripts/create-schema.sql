@@ -128,3 +128,12 @@ CREATE TABLE IF NOT EXISTS resource_user2 (
 );
 
 CREATE INDEX IF NOT EXISTS resource_user2_id_idx ON resource_user2(user_id);
+
+
+CREATE TABLE IF NOT EXISTS sbr_lease(
+    lease_name VARCHAR(255) NOT NULL,
+    owner VARCHAR(255) NOT NULL,
+    deadline BIGINT NOT NULL,
+    PRIMARY KEY(lease_name)
+);
+

@@ -68,7 +68,7 @@ object App extends Ops {
             if (contactPoints.isEmpty)
               throw new Exception(s"$CONTACT_POINTS_VAR must not be empty")
 
-            val endpointList = contactPoints.map(s => s"{host=$s,port=8558}").mkString(",")
+            val endpointList = contactPoints.map(cp => s"{host=$cp,port=8558}").mkString(",")
             ConfigFactory
               .parseString(s"akka.discovery.config.services { $AkkaSystemName = { endpoints = [ $endpointList ] }}")
               .resolve()
