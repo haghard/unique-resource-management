@@ -118,9 +118,11 @@ object Guardian {
             val shardingSettings = ClusterShardingSettings(system)
             val clusterSharding  = ClusterSharding(system)
 
-
-            val (telemetry, traceProvider)  =
-              ZipkinTelemetry.create(system.settings.config.getString("zipkin.host"), system.settings.config.getInt("zipkin.port"))
+            val (telemetry, traceProvider) =
+              ZipkinTelemetry.create(
+                system.settings.config.getString("zipkin.host"),
+                system.settings.config.getInt("zipkin.port")
+              )
             val tracer: Tracer = telemetry.getTracerProvider().get("rs-app")
 
             val resources: ActorRef[ResourceCmd] =
@@ -176,7 +178,7 @@ object Guardian {
               system,
               askTimeout
             )
-            UserResourceLinkProjection.run(resources, userResource, numberOfSlices /*, tracer*/ )(system, askTimeout)
+            UserResourceLinkProjection.run(resources, userResource, numberOfSlices)(system, askTimeout)
 
             Bootstrap.run(userResource, selfAddress.host.get, grpcPort, tracer, traceProvider)(
               system,

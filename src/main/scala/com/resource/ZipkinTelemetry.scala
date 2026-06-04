@@ -30,9 +30,6 @@ object ZipkinTelemetry {
       .setTracerProvider(tracerProvider)
       .buildAndRegisterGlobal()
 
-    // add a shutdown hook to shut down the SDK
-    //Runtime.getRuntime().addShutdownHook(new Thread(() => tracerProvider.close()))
-
     (telemetryDsk, tracerProvider)
   }
 }
