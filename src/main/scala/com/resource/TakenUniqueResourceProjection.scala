@@ -43,10 +43,8 @@ object TakenUniqueResourceProjection {
     takenResources: ActorRef[ResourceCmd],
     userResourceLinks: ActorRef[UserCmd],
     numberOfSlices: Int,
-    resourceTables: Vector[String],
-    askTimeout: akka.util.Timeout
-  )(implicit system: ActorSystem[?]): ActorRef[ShardedDaemonProcessCommand] = {
-    implicit val to = askTimeout
+    resourceTables: Vector[String]
+  )(implicit system: ActorSystem[?], askTimeout: akka.util.Timeout): ActorRef[ShardedDaemonProcessCommand] = {
     val turProjName = entityName + "-proj"
 
     def projection(sliceRange: Range): Projection[EventEnvelope[ResourceEvent]] = {
@@ -68,9 +66,6 @@ object TakenUniqueResourceProjection {
               case ResourceEventMessage.SealedValue.Assigned(assigned) =>
                 assigned.unassignedLocation match {
                   case Some(unassignedLocation) =>
-                    println(
-                      "5. TakenUniqueResourceProjection: projection get assigned  at " + System.currentTimeMillis()
-                    )
                     takenResources.askWithStatus[Done](replyTo =>
                       resource.Unassign(
                         userId = assigned.userId,

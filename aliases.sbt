@@ -34,7 +34,7 @@ addCommandAlias(
 //sudo ifconfig lo0 127.0.0.3 add
 //sudo ifconfig lo0 alias 127.0.0.3 up
 addCommandAlias(
-  "c",
+  "cc",
   "runMain com.resource.App\n" +
     "-DGRPC_PORT=8080\n" +
     "-Dakka.persistence.r2dbc.connection-factory.host=localhost\n" +

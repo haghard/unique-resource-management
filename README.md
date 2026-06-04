@@ -205,8 +205,8 @@ Another similar domain and use cases:
    * vehicles renting
    * students and course subscriptions
 
+### Kube
 ```
-
                      
 kubectl --kubeconfig=./kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml delete namespaces resources-ns
 
@@ -254,13 +254,10 @@ iptables -D INPUT -p udp -j DROP
 ```
 
 
-###
-
 http GET :8558/cluster/members
 
 Find the PID for the unreachable node:
 > lsof -i :2550 | grep LISTEN | awk '{print $2}'
-
 
 > sudo lsof -i -P -n | grep <port number>
 > sudo lsof -i :80
@@ -268,8 +265,6 @@ Find the PID for the unreachable node:
 or
 
 > ps -ef | grep sbt-launch.jar
-
-
 
 Hard kill
 > kill -9 <pid>
@@ -280,10 +275,7 @@ Suspend
 Resume
 > kill -cont <pid>
 
-curl -w '\n' -X PUT -H 'Content-Type: multipart/form-data' -F operation=down http://192.168.0.30:8079/fsa/cluster/members/fsa@192.168.0.3:2551
-
-curl -w '\n' -X PUT -H 'Content-Type: multipart/form-data' -F operation=leave http://192.168.0.30:8079/fsa/cluster/members/fsa@192.168.0.3:2551
-
+curl -w '\n' -X PUT -H 'Content-Type: multipart/form-data' -F operation=down http://192.168.0.1:8558/cluster/members/resources@192.168.0.3:2551
 
 
 

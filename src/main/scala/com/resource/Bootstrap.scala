@@ -7,9 +7,9 @@ import akka.actor.CoordinatedShutdown.*
 import akka.coordination.lease.psg.PostgresLease
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.*
-import akka.management.scaladsl.AkkaManagement
 import com.resource.api.*
 import com.resource.domain.user.*
+import io.opentelemetry.api.trace.Tracer
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.Future
@@ -29,7 +29,9 @@ object Bootstrap {
   def run(
     userRequest: ActorRef[UserCmd],
     bindHost: String,
-    port: Int
+    port: Int,
+    tracer: Tracer,
+    traceProvider: io.opentelemetry.sdk.trace.SdkTracerProvider
   )(implicit system: ActorSystem[?], reqTimeout: akka.util.Timeout): Unit = {
     import system.executionContext
 
@@ -39,7 +41,7 @@ object Bootstrap {
 
     val shutdown                                         = CoordinatedShutdown(system)
     val grpcService: HttpRequest => Future[HttpResponse] =
-      ResourceServiceHandler.withServerReflection(new ResourceServiceImpl(userRequest))
+      ResourceServiceHandler.withServerReflection(new ResourceServiceImpl(userRequest, tracer))
 
     Http(system)
       .newServerAt(bindHost, port)
@@ -51,6 +53,7 @@ object Bootstrap {
         case Success(binding) =>
           system.log.info("★ ★ ★ ★ ★ ★ ★ ★ ★ ActorSystem({}) tree ★ ★ ★ ★ ★ ★ ★ ★ ★", system.name)
           system.log.info(system.printTree)
+
           shutdown.addTask(PhaseBeforeServiceUnbind, "before-unbind") { () =>
             Future.successful {
               system.log.info("★ ★ ★ CoordinatedShutdown [before-unbind] ★ ★ ★")
@@ -58,9 +61,6 @@ object Bootstrap {
             }
           }
 
-          // Next 2 tasks(PhaseServiceUnbind, PhaseServiceRequestsDone) makes sure that during shutdown
-          // no more requests are accepted and
-          // all in-flight requests have been processed
           shutdown.addTask(PhaseServiceUnbind, "http-unbind") { () =>
             // No new connections are accepted. Existing connections are still allowed to perform request/response cycles
             binding.unbind().map { done =>
@@ -69,12 +69,13 @@ object Bootstrap {
             }
           }
 
-          // graceful termination request being handled on this connection
+          // graceful termination of requests being handled on this connection
           shutdown.addTask(PhaseServiceRequestsDone, "http-terminate") { () =>
             /** It doesn't accept new connection, but it drains the existing connections Until the `terminationDeadline`
               * all the req that have been accepted will be completed and only than the shutdown will continue
               */
 
+            traceProvider.shutdown()
             binding.terminate(terminationDeadline).map { _ =>
               system.log.info("★ ★ ★ CoordinatedShutdown [http-api.terminate]  ★ ★ ★")
               Done
@@ -86,13 +87,6 @@ object Bootstrap {
             Http().shutdownAllConnectionPools().map { _ =>
               system.log.info("★ ★ ★ CoordinatedShutdown [close.connections] ★ ★ ★")
               Done
-            }
-          }
-
-          shutdown.addTask(PhaseServiceUnbind, "akka-management.stop") { () =>
-            AkkaManagement(system).stop().map { done =>
-              system.log.info("★ ★ ★ CoordinatedShutdown [akka-management.stop]  ★ ★ ★")
-              done
             }
           }
 

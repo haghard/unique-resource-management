@@ -95,6 +95,10 @@ libraryDependencies ++= Seq(
   //"com.lightbend.akka.management" %% "akka-rolling-update-kubernetes" % "1.4.1",
   
   "org.hdrhistogram" % "HdrHistogram" % "2.2.2",
+
+  "io.opentelemetry"                       % "opentelemetry-exporter-zipkin"             % "1.58.0",
+  //"io.opentelemetry"                     % "opentelemetry-exporter-jaeger" % "1.34.1",
+
   "com.lihaoyi" % "ammonite" % AmmoniteVersion % "test" cross CrossVersion.full
 )
 

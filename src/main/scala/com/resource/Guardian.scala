@@ -15,6 +15,7 @@ import scala.collection.immutable
 import scala.concurrent.duration.DurationInt
 import com.resource.domain.user.*
 import com.resource.domain.resource.*
+import io.opentelemetry.api.trace.Tracer
 
 import java.lang.management.ManagementFactory
 import java.net.InetAddress
@@ -117,6 +118,11 @@ object Guardian {
             val shardingSettings = ClusterShardingSettings(system)
             val clusterSharding  = ClusterSharding(system)
 
+
+            val (telemetry, traceProvider)  =
+              ZipkinTelemetry.create(system.settings.config.getString("zipkin.host"), system.settings.config.getInt("zipkin.port"))
+            val tracer: Tracer = telemetry.getTracerProvider().get("rs-app")
+
             val resources: ActorRef[ResourceCmd] =
               clusterSharding
                 .init(
@@ -130,7 +136,7 @@ object Guardian {
             val userResource: ActorRef[UserCmd] =
               clusterSharding
                 .init(
-                  Entity(UserResource.TypeKey)(UserResource(_))
+                  Entity(UserResource.TypeKey)(UserResource(_ /*, tracer*/ ))
                     .withMessageExtractor(UserResource.Extractor(shardingSettings.numberOfShards))
                     .withStopMessage(com.resource.domain.user.Passivate())
                     .withAllocationStrategy(utils.newLeastShardAllocationStrategy())
@@ -166,10 +172,16 @@ object Guardian {
               (0 until numberOfResourceUserTables).map(i => s"resource_user$i").toVector
 
             val askTimeout = 4.seconds
-            TakenUniqueResourceProjection.run(resources, userResource, numberOfSlices, resourceByUserTables, askTimeout)
-            UserResourceLinkProjection.run(resources, userResource, numberOfSlices, askTimeout)
+            TakenUniqueResourceProjection.run(resources, userResource, numberOfSlices, resourceByUserTables)(
+              system,
+              askTimeout
+            )
+            UserResourceLinkProjection.run(resources, userResource, numberOfSlices /*, tracer*/ )(system, askTimeout)
 
-            Bootstrap.run(userResource, selfAddress.host.get, grpcPort)(system, akka.util.Timeout(6.seconds))
+            Bootstrap.run(userResource, selfAddress.host.get, grpcPort, tracer, traceProvider)(
+              system,
+              akka.util.Timeout(6.seconds)
+            )
             Behaviors.same
           }
       }

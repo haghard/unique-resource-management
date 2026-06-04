@@ -286,11 +286,12 @@ object UserResource {
                       pbState -> StatusReply.error("Unexpected " + classOf[ResponseTag].getName)
                   }
 
-                println("6. UserResource: " + responseTag + " at " + System.currentTimeMillis())
+                val key = s"$userId/$responseTag/$cmdSeqNum = ${resource.uniqueKey}"
+
                 Effect
                   .persist(updatedState)
                   .thenRun { _ =>
-                    ctx.log.warn(s"Unlock [$userId/$responseTag/$cmdSeqNum = ${resource.uniqueKey}]")
+                    ctx.log.warn(s"Unlock [$key}]")
                     if (projection.nonEmpty) {
                       ctx.log.info(s"Confirm $cmdSeqNum")
                       projectionToReply.tell(StatusReply.success(akka.Done))

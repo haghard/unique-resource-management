@@ -108,7 +108,6 @@ object TakenUniqueResource {
                 )
 
             case None =>
-              println("2. TakenUniqueResource:  Assigned  at " + System.currentTimeMillis())
               val eventSeqNum = EventSourcedBehavior.lastSequenceNumber(ctx)
               Effect
                 .persist(Assigned(userId, resource, eventSeqNum, None, pendingCmdSeqNum))

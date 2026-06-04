@@ -35,11 +35,9 @@ object UserResourceLinkProjection {
   def run(
     takenResources: ActorRef[ResourceCmd],
     userResourceLinks: ActorRef[UserCmd],
-    numberOfSlices: Int,
-    askTimeout: akka.util.Timeout
-  )(implicit system: ActorSystem[?]) = {
+    numberOfSlices: Int
+  )(implicit system: ActorSystem[?], askTimeout: akka.util.Timeout) = {
     val projectionName = entityName + "-proj"
-    implicit val to    = askTimeout
 
     def projection(sliceRange: Range): Projection[DurableStateChange[UserResourceState]] = {
       implicit val scheduler         = system.scheduler
@@ -59,7 +57,6 @@ object UserResourceLinkProjection {
               case c: UpdatedDurableState[UserResourceState] =>
                 c.value.lockState match {
                   case Some(ls) =>
-                    println("1. UserResourceLinkProjection: Lock " + c.toString + " at " + System.currentTimeMillis())
                     ls.pendingCmd.asMessage.sealedValue match {
                       case ResourceCmdMessage.SealedValue.Assign(assign) =>
                         takenResources
@@ -72,10 +69,6 @@ object UserResourceLinkProjection {
                             )
                           }
                           .flatMap { reply =>
-                            println(
-                              "4. UserResourceLinkProjection: " + reply.responseTag + " at " + System
-                                .currentTimeMillis()
-                            )
                             if (reply.responseTag.isAssignAccepted)
                               Future.successful(Done)
                             else {
@@ -152,7 +145,6 @@ object UserResourceLinkProjection {
                         Future.failed(new Exception(s"Unexpected pending cmd ${o.getClass.getName}"))
                     }
                   case None =>
-                    println("1. UnLock " + c.toString + " at " + System.currentTimeMillis())
                     Future.successful(Done)
                 }
 

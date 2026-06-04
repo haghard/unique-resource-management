@@ -1,10 +1,8 @@
-
 services:
   postgres-db:
     image: postgres:latest
-    #container_name: postgres_db
     ports:
-      - 5432:5432
+      - "5432:5432"
     environment:
       POSTGRES_USER: root
       POSTGRES_PASSWORD: secret
@@ -15,5 +13,10 @@ services:
       - ./ddl-scripts/create-schema.sql:/docker-entrypoint-initdb.d/create-schema.sql
     mem_limit: 1500M
     mem_reservation: 1500M
-    cpus: 1.5
+    cpus: 0.5
     command: ["postgres", "-c", "log_statement=all"] # ???
+
+  zipkin-all-in-one:
+    image: openzipkin/zipkin:3.6.1
+    ports:
+       - "9411:9411"
