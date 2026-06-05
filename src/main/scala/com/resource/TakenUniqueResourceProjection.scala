@@ -61,7 +61,6 @@ object TakenUniqueResourceProjection {
         sourceProvider(sliceRange),
         handler = () =>
           (session: R2dbcSession, envelope: EventEnvelope[ResourceEvent]) => {
-            // Thread.sleep(500)
             envelope.event.asMessage.sealedValue match {
               case ResourceEventMessage.SealedValue.Assigned(assigned) =>
                 assigned.unassignedLocation match {

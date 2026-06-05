@@ -141,14 +141,14 @@ object UserResourceLinkProjection {
                             }
                           }
 
-                      case o =>
-                        Future.failed(new Exception(s"Unexpected pending cmd ${o.getClass.getName}"))
+                      case other =>
+                        Future.failed(new Exception(s"Unexpected pending cmd ${other.getClass.getName}"))
                     }
                   case None =>
                     Future.successful(Done)
                 }
 
-              case _: DeletedDurableState[_] =>
+              case _: DeletedDurableState[?] =>
                 Future.successful(Done)
             }
         }

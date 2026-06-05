@@ -15,7 +15,6 @@ import scala.collection.immutable
 import scala.concurrent.duration.DurationInt
 import com.resource.domain.user.*
 import com.resource.domain.resource.*
-import io.opentelemetry.api.trace.Tracer
 
 import java.lang.management.ManagementFactory
 import java.net.InetAddress
@@ -31,7 +30,7 @@ object Guardian {
     final case class ClusterViewAfterSelfUp(members: immutable.SortedSet[Member]) extends Protocol
   }
 
-  def apply(buildVersion: String, grpcPort: Int): Behavior[Nothing] =
+  def apply(grpcPort: Int): Behavior[Nothing] =
     Behaviors
       .setup[Protocol] { implicit ctx =>
         implicit val system            = ctx.system
@@ -65,10 +64,11 @@ object Guardian {
               val jvmInfo    =
                 s"Cores:${jvmRuntime.availableProcessors()} Memory:[Max=${jvmRuntime.maxMemory() / 1000000}Mb, Free=${jvmRuntime.freeMemory() / 1000000}Mb]"
 
+              val buildVersion = s"${com.resource.BuildInfo.version} built at ${com.resource.BuildInfo.builtAtString}"
               logger.info(
                 s"""
                    |--------------------------------------------------------------------------------
-                   |ver($buildVersion)
+                   |app-version=(${system.settings.config.getString("akka.cluster.app-version")}), $buildVersion
                    |SBR:${system.settings.config
                     .getString("akka.cluster.split-brain-resolver.lease-majority.lease-implementation")}
                    |Member:${cluster.selfMember.details}🧪ShardCoordinator:${shardCoordinator.details}🧪Leader:[${cluster.state.leader
@@ -118,13 +118,6 @@ object Guardian {
             val shardingSettings = ClusterShardingSettings(system)
             val clusterSharding  = ClusterSharding(system)
 
-            val (telemetry, traceProvider) =
-              ZipkinTelemetry.create(
-                system.settings.config.getString("zipkin.host"),
-                system.settings.config.getInt("zipkin.port")
-              )
-            val tracer: Tracer = telemetry.getTracerProvider().get("rs-app")
-
             val resources: ActorRef[ResourceCmd] =
               clusterSharding
                 .init(
@@ -138,7 +131,7 @@ object Guardian {
             val userResource: ActorRef[UserCmd] =
               clusterSharding
                 .init(
-                  Entity(UserResource.TypeKey)(UserResource(_ /*, tracer*/ ))
+                  Entity(UserResource.TypeKey)(UserResource(_))
                     .withMessageExtractor(UserResource.Extractor(shardingSettings.numberOfShards))
                     .withStopMessage(com.resource.domain.user.Passivate())
                     .withAllocationStrategy(utils.newLeastShardAllocationStrategy())
@@ -180,10 +173,7 @@ object Guardian {
             )
             UserResourceLinkProjection.run(resources, userResource, numberOfSlices)(system, askTimeout)
 
-            Bootstrap.run(userResource, selfAddress.host.get, grpcPort, tracer, traceProvider)(
-              system,
-              akka.util.Timeout(6.seconds)
-            )
+            Bootstrap.run(userResource, selfAddress.host.get, grpcPort)(system, akka.util.Timeout(6.seconds))
             Behaviors.same
           }
       }

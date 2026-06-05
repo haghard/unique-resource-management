@@ -69,11 +69,18 @@ It's a relative order invariant. Resource acquisition requires a `precondition c
 
 docker-compose -f docker-compose.yml up
 
-sbt a
+sbt -Dconfig.resource=local1.conf "runMain com.resource.App" 
 
-sbt b
+sbt -Dconfig.resource=local2.conf "runMain com.resource.App" 
 
 ```
+
+### Publish the latest version 
+
+```
+docker:publish
+```
+
 
 ### Available api 
 
@@ -238,6 +245,12 @@ kubectl delete pod <pod-name>
 
 ```
 
+### Zipkin
+
+http://127.0.0.1:9411/zipkin
+
+Traces search query example - serviceName=resources,spanName=com.resource.api.resourceservice/assign
+
 
 ### Drop all traffic to simulate split brain
 ```
@@ -275,12 +288,4 @@ Suspend
 Resume
 > kill -cont <pid>
 
-curl -w '\n' -X PUT -H 'Content-Type: multipart/form-data' -F operation=down http://192.168.0.1:8558/cluster/members/resources@192.168.0.3:2551
-
-
-
-### Links
-
-  https://doc.akka.io/libraries/akka-projection/current/durable-state.html
-
-  https://doc.akka.io/libraries/akka-core/current/typed/index-persistence-durable-state.html
+curl -w '\n' -X PUT -H 'Content-Type: multipart/form-data' -F operation=down http://192.168.0.1:8558/cluster/members/resources@192.168.0.1:2551

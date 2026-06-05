@@ -41,7 +41,7 @@ spec:
         #  emptyDir: { }
       containers:
         - name:  resources
-          image: haghard/resources:0.1.1
+          image: haghard/resources:0.3.6
           imagePullPolicy: Always
           #args:
             #- -cpus

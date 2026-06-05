@@ -16,7 +16,41 @@ services:
     cpus: 0.5
     command: ["postgres", "-c", "log_statement=all"] # ???
 
-  zipkin-all-in-one:
-    image: openzipkin/zipkin:3.6.1
+  zipkin-db:
+    image: mariadb:11.8.5
+    container_name: zipkin-db
     ports:
-       - "9411:9411"
+      - "3306:3306"
+    environment:
+      - MARIADB_ROOT_PASSWORD=secret
+      - MARIADB_DATABASE=zipkin
+      - MARIADB_PASSWORD=zipkin
+      - MARIADB_USER=zipkin
+    volumes:
+      # 1. Mounts your storage volume
+      - ./zipkin-db-data:/var/lib/mysql
+      - ./ddl-scripts/init-zipkin.sql:/docker-entrypoint-initdb.d/init-zipkin.sql
+    deploy:
+      resources:
+        limits:
+          cpus: "0.3"
+          memory: 512M
+
+  # Zipkin
+  # http://127.0.0.1:9411/zipkin/
+  zipkin:
+    image: ghcr.io/openzipkin/zipkin:3.6.1
+    container_name: zipkin
+    environment:
+      - STORAGE_TYPE=mysql
+      - MYSQL_HOST=zipkin-db
+      - MYSQL_DB=zipkin
+      - MYSQL_USER=zipkin
+      - MYSQL_PASS=zipkin
+    ports:
+      - "9411:9411"
+    depends_on:
+      - zipkin-db
+
+volumes:
+    zipkin-db-data:

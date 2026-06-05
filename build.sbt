@@ -1,5 +1,6 @@
+import sbt.ClassLoaderLayeringStrategy.Flat
 
-version := "0.3.5"
+version := "0.3.6"
 scalaVersion := "2.13.18"
 name := "resources"
 
@@ -7,7 +8,7 @@ val releaseJvmVersion = "17"
 
 initialize := {
   val _ = initialize.value
-  val current  = sys.props("java.specification.version")
+  val current = sys.props("java.specification.version")
   if (current != releaseJvmVersion)
     sys.error(s"Java $releaseJvmVersion is required for this project. Found $current instead.")
 }
@@ -55,25 +56,25 @@ val AkkaProjectionVersion = sys.props.getOrElse("akka-projection.version", "1.4.
 //https://mvnrepository.com/artifact/com.lihaoyi/ammonite
 //https://github.com/com-lihaoyi/Ammonite/releases
 val AmmoniteVersion = "3.0.9"
+val KamonVersion = "2.8.1"
 
 libraryDependencies ++= Seq(
-  "com.typesafe.akka" %% "akka-slf4j"  % AkkaVersion,
-  "com.typesafe.akka" %% "akka-persistence-typed"       % AkkaVersion,
-  "com.typesafe.akka" %% "akka-cluster-sharding-typed"  % AkkaVersion,
-  "com.typesafe.akka" %% "akka-cluster-tools"           % AkkaVersion,
+  "com.typesafe.akka" %% "akka-slf4j" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-persistence-typed" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-cluster-sharding-typed" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
 
   "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
-  //"com.github.jaceksokol" %% "akka-stream-map-async-partition" % "1.0.3",
 
-  "com.typesafe.akka"             %% "akka-discovery"               % AkkaVersion,
+  "com.typesafe.akka" %% "akka-discovery" % AkkaVersion,
   "com.lightbend.akka.management" %% "akka-management-cluster-bootstrap" % AkkaManagementVersion,
   "com.lightbend.akka.management" %% "akka-management-cluster-http" % AkkaManagementVersion,
 
-  "com.lightbend.akka.management" %%  "akka-lease-kubernetes"             % AkkaManagementVersion,
-  "com.lightbend.akka.discovery"  %%  "akka-discovery-kubernetes-api"     % AkkaManagementVersion,
+  "com.lightbend.akka.management" %% "akka-lease-kubernetes" % AkkaManagementVersion,
+  "com.lightbend.akka.discovery" %% "akka-discovery-kubernetes-api" % AkkaManagementVersion,
 
   "ch.qos.logback" % "logback-classic" % "1.5.34",
-  "org.slf4j"      % "slf4j-api"       %  "2.0.18",
+  "org.slf4j" % "slf4j-api" % "2.0.18",
 
   "io.aeron" % "aeron-driver" % "1.46.9", //1.47.0
   "io.aeron" % "aeron-client" % "1.46.9",
@@ -88,16 +89,19 @@ libraryDependencies ++= Seq(
   "com.typesafe.akka" %% "akka-coordination" % AkkaVersion,
 
   //https://mvnrepository.com/artifact/com.lightbend.akka/akka-projection-durable-state_3/1.4.1 May 30, 2023
-  "com.lightbend.akka" %% "akka-projection-durable-state" % "1.4.1",
+  "com.lightbend.akka" %% "akka-projection-durable-state" % "1.4.0",
 
   //https://mvnrepository.com/artifact/com.lightbend.akka.management/akka-rolling-update-kubernetes_3/1.4.1 //May 25, 2023
   //https://doc.akka.io/libraries/akka-management/current/rolling-updates.html
   //"com.lightbend.akka.management" %% "akka-rolling-update-kubernetes" % "1.4.1",
-  
+
   "org.hdrhistogram" % "HdrHistogram" % "2.2.2",
 
-  "io.opentelemetry"                       % "opentelemetry-exporter-zipkin"             % "1.58.0",
-  //"io.opentelemetry"                     % "opentelemetry-exporter-jaeger" % "1.34.1",
+  "io.kamon" %% "kamon-core" % KamonVersion,
+  "io.kamon" %% "kamon-bundle" % KamonVersion,
+  "io.kamon" %% "kamon-status-page" % KamonVersion,
+  "io.kamon" %% "kamon-akka-http" % KamonVersion,
+  "io.kamon" %% "kamon-zipkin" % KamonVersion,
 
   "com.lihaoyi" % "ammonite" % AmmoniteVersion % "test" cross CrossVersion.full
 )
@@ -105,12 +109,12 @@ libraryDependencies ++= Seq(
 addCommandAlias("c", "compile")
 addCommandAlias("r", "reload")
 
-enablePlugins(AkkaGrpcPlugin, JavaAppPackaging, DockerPlugin, BuildInfoPlugin)
+enablePlugins(AkkaGrpcPlugin, JavaAppPackaging, DockerPlugin, BuildInfoPlugin, JavaAgent)
+
+classLoaderLayeringStrategy := Flat
 
 Compile / mainClass := Some("com.resource.App")
 Compile / run := Some("com.resource.App")
-
-//dockerBaseImage := "docker.io/library/adoptopenjdk:17-jre-hotspot"
 
 Compile / scalacOptions ++= Seq(
   //Migration mode. Preparing your code to be fully moved to Scala 3.
@@ -140,31 +144,28 @@ javaOptions ++= Seq(
 
   "-Xmx256m",
   "-Xms128m",
-
   "-XX:+AlwaysPreTouch",
   "-XX:MaxDirectMemorySize=64m",
 
   // https://dzone.com/articles/troubleshooting-problems-with-native-off-heap-memo
   // To allow getting native memory stats for threads
   "-XX:NativeMemoryTracking=summary", // detail
-
   "-XX:ActiveProcessorCount=6",
-
   "-XX:+UseZGC",
-  //"--add-opens",  "java.base/java.nio=ALL-UNNAMED",
-  //"--add-opens",  "java.base/sun.nio.ch=ALL-UNNAMED",
-
   "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED",
   "--add-opens=java.base/java.lang=ALL-UNNAMED",
   "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED",
   "--add-opens=java.base/java.io=ALL-UNNAMED",
   "--add-exports=jdk.unsupported/sun.misc=ALL-UNNAMED",
+  "--add-opens=java.base/jdk.internal.misc=ALL-UNNAMED"
 )
 
-dockerBaseImage   := "haghard/jdk17-open-table:1.0.1" //TODO: build it for jdk21
-dockerRepository    := Some("haghard")
-dockerExposedPorts     := Seq(8080, 8558, 25520)
-Docker / daemonUser    := "root"
+javaAgents += "io.kamon" % "kanela-agent" % "2.0.0" % "runtime"
+
+dockerBaseImage := "haghard/jdk17-open-table:1.0.1"
+dockerRepository := Some("haghard")
+dockerExposedPorts := Seq(8080, 8558, 25520)
+Docker / daemonUser := "root"
 Docker / daemonUserUid := None
 // Publish settings
 Compile / packageDoc / publishArtifact := false // speed up building Docker images
@@ -173,7 +174,7 @@ dockerUpdateLatest := true
 dockerBuildxPlatforms := Seq("linux/amd64")
 
 // make version compatible with docker for publishing
-ThisBuild / dynverSeparator := "-"
+dynverSeparator := "-"
 
 buildInfoKeys := Seq[BuildInfoKey](name, version, scalaVersion, sbtVersion)
 buildInfoPackage := "com.resource"
@@ -182,24 +183,29 @@ buildInfoOptions += BuildInfoOption.BuildTime
 
 scalafmtOnCompile := true
 
-//run / fork := false
 run / fork := true
-run / connectInput := true
+//run / connectInput := true
+
+// pass along config selection to forked jvm
+run / javaOptions ++= sys.props
+  .get("config.resource")
+  .fold(Seq.empty[String])(res => Seq(s"-Dconfig.resource=$res"))
 
 // Allow ctrl-c to kill forked tasks without killing SBT
-Global / cancelable := true
+Global / cancelable := false
+
 
 dependencyOverrides ++= Seq(
-  "com.typesafe.akka" %% "akka-actor-typed"             % AkkaVersion,
-  "com.typesafe.akka" %% "akka-protobuf"                % AkkaVersion,
-  "com.typesafe.akka" %% "akka-protobuf-v3"             % AkkaVersion,
-  "com.typesafe.akka" %% "akka-persistence"             % AkkaVersion,
-  "com.typesafe.akka" %% "akka-actor"                   % AkkaVersion,
-  "com.typesafe.akka" %% "akka-cluster"                 % AkkaVersion,
-  "com.typesafe.akka" %% "akka-cluster-sharding-typed"  % AkkaVersion,
-  "com.typesafe.akka" %% "akka-coordination"            % AkkaVersion,
-  "com.typesafe.akka" %% "akka-stream"                  % AkkaVersion,
-  "com.typesafe.akka" %% "akka-cluster-tools"           % AkkaVersion,
+  "com.typesafe.akka" %% "akka-actor-typed" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-protobuf" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-protobuf-v3" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-persistence" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-actor" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-cluster" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-cluster-sharding-typed" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-coordination" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-stream" % AkkaVersion,
+  "com.typesafe.akka" %% "akka-cluster-tools" % AkkaVersion,
 )
 
 //test:run
@@ -209,4 +215,3 @@ Test / sourceGenerators += Def.task {
   IO.write(file, """object amm extends App { ammonite.Main().run() }""")
   Seq(file)
 }.taskValue
-

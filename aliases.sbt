@@ -1,4 +1,4 @@
-
+/*
 addCommandAlias(
   "a",
   "runMain com.resource.App\n" +
@@ -46,4 +46,4 @@ addCommandAlias(
     "-DREQ_CONTACT_POINT_VAR=2\n"+
     "-Dakka.management.cluster.bootstrap.contact-point-discovery.discovery-method=config\n" +
     "-DCONTACT_POINTS=127.0.0.1,127.0.0.2"
-)
+)*/

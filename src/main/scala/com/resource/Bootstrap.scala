@@ -9,7 +9,6 @@ import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.*
 import com.resource.api.*
 import com.resource.domain.user.*
-import io.opentelemetry.api.trace.Tracer
 
 import scala.concurrent.duration.Duration
 import scala.concurrent.Future
@@ -29,9 +28,7 @@ object Bootstrap {
   def run(
     userRequest: ActorRef[UserCmd],
     bindHost: String,
-    port: Int,
-    tracer: Tracer,
-    traceProvider: io.opentelemetry.sdk.trace.SdkTracerProvider
+    port: Int
   )(implicit system: ActorSystem[?], reqTimeout: akka.util.Timeout): Unit = {
     import system.executionContext
 
@@ -41,7 +38,7 @@ object Bootstrap {
 
     val shutdown                                         = CoordinatedShutdown(system)
     val grpcService: HttpRequest => Future[HttpResponse] =
-      ResourceServiceHandler.withServerReflection(new ResourceServiceImpl(userRequest, tracer))
+      ResourceServiceHandler.withServerReflection(new ResourceServiceImpl(userRequest))
 
     Http(system)
       .newServerAt(bindHost, port)
@@ -75,7 +72,6 @@ object Bootstrap {
               * all the req that have been accepted will be completed and only than the shutdown will continue
               */
 
-            traceProvider.shutdown()
             binding.terminate(terminationDeadline).map { _ =>
               system.log.info("★ ★ ★ CoordinatedShutdown [http-api.terminate]  ★ ★ ★")
               Done
