@@ -289,12 +289,3 @@ Resume
 > kill -cont <pid>
 
 curl -w '\n' -X PUT -H 'Content-Type: multipart/form-data' -F operation=down http://192.168.0.1:8558/cluster/members/resources@192.168.0.1:2551
-
-
-
-1) https://github.com/mckeeh3/akka-typed-java-cluster
-
-2) Diagrams from https://github.com/hanishi/pekko-dast
-
-
-Riper places Trip
