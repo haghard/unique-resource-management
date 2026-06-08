@@ -158,7 +158,11 @@ scalafmtOnCompile := true
 
 //run / fork := false
 run / fork := true
-run / connectInput := true
+//run / connectInput := true
+// pass along config selection to forked jvm
+run / javaOptions ++= sys.props.get("config.resource").fold(Seq.empty[String])(res => Seq(s"-Dconfig.resource=$res"))
+Global / cancelable := false // ctrl-c
+
 
 // Allow ctrl-c to kill forked tasks without killing SBT
 Global / cancelable := true

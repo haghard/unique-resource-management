@@ -145,9 +145,8 @@ object UserResourceLink {
 
                 case None =>
                   val cmdSeqNum = DurableStateBehavior.lastSequenceNumber(ctx)
-                  ctx.log.warn(
-                    s"Lock [$userId/${ResponseTag.Assigned}/$cmdSeqNum = ${resourceToAssign.uniqueKey}]"
-                  )
+                  val lockDesc  = s"$userId/${ResponseTag.Assigned}/$cmdSeqNum"
+                  ctx.log.warn(s"Acquire lock:[$lockDesc]")
                   val pendingCmd =
                     resource.Assign(
                       assign.userId,
@@ -161,7 +160,7 @@ object UserResourceLink {
                     .persist(updatedState)
                     .thenRun { _: UserResourceState =>
                       uniqueResources.tell(pendingCmd)
-                      timer.startSingleTimer(userId + "@" + cmdSeqNum, RedeliveryTick(), redeliverAfter)
+                      timer.startSingleTimer(lockDesc, RedeliveryTick(), redeliverAfter)
                     }
                     .thenNoReply()
               }
@@ -182,7 +181,8 @@ object UserResourceLink {
                 case Some(linked) =>
                   if (linked.location == location) {
                     val cmdSeqNum = DurableStateBehavior.lastSequenceNumber(ctx)
-                    ctx.log.warn(s"Lock [$userId/${ResponseTag.Unassigned}/$cmdSeqNum = ${linked.resource.uniqueKey}]")
+                    val lockDesc  = s"$userId/${ResponseTag.Unassigned}/$cmdSeqNum"
+                    ctx.log.warn(s"Acquire lock:[$lockDesc]")
 
                     val pc =
                       resource.Release(
@@ -199,7 +199,7 @@ object UserResourceLink {
                       .persist(updatedState)
                       .thenRun { _: UserResourceState =>
                         uniqueResources.tell(pc)
-                        timer.startSingleTimer(userId + "@" + cmdSeqNum, RedeliveryTick(), redeliverAfter)
+                        timer.startSingleTimer(lockDesc, RedeliveryTick(), redeliverAfter)
                       }
                       .thenNoReply()
                   } else {
@@ -243,10 +243,9 @@ object UserResourceLink {
                         }
                     } else {
                       val cmdSeqNum = DurableStateBehavior.lastSequenceNumber(ctx)
-                      ctx.log.warn(
-                        s"Lock [$userId/${ResponseTag.Reassigned}/$cmdSeqNum = ${resourceToAssign.uniqueKey}]"
-                      )
 
+                      val lockDesc = s"$userId/${ResponseTag.Reassigned}/$cmdSeqNum"
+                      ctx.log.warn(s"Acquire lock:[$lockDesc]")
                       val pc =
                         resource.Reassign(
                           reassign.userId,
@@ -261,7 +260,7 @@ object UserResourceLink {
                         .persist(updatedState)
                         .thenRun { _: UserResourceState =>
                           uniqueResources.tell(pc)
-                          timer.startSingleTimer(userId + "@" + cmdSeqNum, RedeliveryTick(), redeliverAfter)
+                          timer.startSingleTimer(lockDesc, RedeliveryTick(), redeliverAfter)
                         }
                         .thenNoReply()
                     }
@@ -329,21 +328,23 @@ object UserResourceLink {
                 Effect
                   .persist(updatedState)
                   .thenRun { _ =>
-                    ctx.log.warn(s"Unlock [$userId/$requestTag/$cmdSeqNum = ${resource.uniqueKey}]")
+                    ctx.log.warn(s"Release lock [$userId/$requestTag/$cmdSeqNum]")
                     if (projection.nonEmpty) {
                       ctx.log.info(s"Confirm $cmdSeqNum")
                       projectionToReply.tell(StatusReply.success(akka.Done))
                     }
                   }
                   .thenReply(refResolver.resolveActorRef(grpcClient)) { _: UserResourceState =>
-                    ctx.log.info(s"Released ${requestTag.name}-lock / ${updatedState.linkedResource.getOrElse("")}")
+                    ctx.log.warn(
+                      s"Release lock [$userId/$requestTag/$cmdSeqNum]. ${updatedState.linkedResource.getOrElse("")}"
+                    )
                     statusReply
                   }
               } else if (pendingCmdSeqNum > cmdSeqNum) {
                 Effect.none
                   .thenRun { _: UserResourceState =>
                     if (projection.nonEmpty) {
-                      ctx.log.info(s"Reconfirm old cmd $cmdSeqNum")
+                      ctx.log.info(s"Reconfirm $cmdSeqNum")
                       projectionToReply.tell(StatusReply.success(akka.Done))
                     }
                   }

@@ -6,3 +6,4 @@ target
 logs
 /pgdata18/
 /.sbtopts
+/zipkin-db-data

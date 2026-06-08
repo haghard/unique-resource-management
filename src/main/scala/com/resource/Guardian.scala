@@ -30,13 +30,12 @@ object Guardian {
     final case class ClusterViewAfterSelfUp(members: immutable.SortedSet[Member]) extends Protocol
   }
 
-  def apply(buildVersion: String, grpcPort: Int): Behavior[Nothing] =
+  def apply(grpcPort: Int): Behavior[Nothing] =
     Behaviors
       .setup[Protocol] { implicit ctx =>
-        implicit val system                     = ctx.system
-        implicit val timeout: akka.util.Timeout = akka.util.Timeout(4.seconds)
-        implicit val cluster                    = akka.cluster.typed.Cluster(system)
-        implicit val selfUniqueAddress          = SelfUniqueAddress(cluster.selfMember.uniqueAddress)
+        implicit val system            = ctx.system
+        implicit val cluster           = akka.cluster.typed.Cluster(system)
+        implicit val selfUniqueAddress = SelfUniqueAddress(cluster.selfMember.uniqueAddress)
 
         val selfAddress = selfUniqueAddress.uniqueAddress.address
         ctx.log.warn("★ ★ ★  SelfUp: {}  ★ ★ ★", selfUniqueAddress)
@@ -67,13 +66,17 @@ object Guardian {
               val jvmInfo    =
                 s"Cores:${jvmRuntime.availableProcessors()} Memory:[Max=${jvmRuntime.maxMemory() / 1000000}Mb, Free=${jvmRuntime.freeMemory() / 1000000}Mb]"
 
+              val buildVersion = s"${com.resource.BuildInfo.version} built at ${com.resource.BuildInfo.builtAtString}"
               ctx.log.info(
                 s"""
                    |--------------------------------------------------------------------------------
-                   |ver($buildVersion)
-                   |Member:${cluster.selfMember.details}🧪ShardCoordinator:${shardCoordinator.details}🧪Leader:[${cluster.state.leader
+                   |app-version=(${system.settings.config.getString("akka.cluster.app-version")}), $buildVersion
+                   |ClusterMember:${cluster.selfMember.details}🧪ShardCoordinator:${shardCoordinator.details}🧪Leader:[${cluster.state.leader
                     .getOrElse("")}]
                    |${shardCoordinator.singletonInfo}
+                   |
+                   |SBR:${system.settings.config
+                    .getString("akka.cluster.split-brain-resolver.lease-majority.lease-implementation")}
                    |Members:[${membersByAge.map(m => s"${m.details}, v${m.appVersion}").mkString(", ")}]
                    |
                    |Env
@@ -110,7 +113,7 @@ object Guardian {
             val resources: ActorRef[ResourceCmd] =
               clusterSharding
                 .init(
-                  Entity(TakenUniqueResource.TypeKey)(TakenUniqueResource(_, 10))
+                  Entity(TakenUniqueResource.TypeKey)(TakenUniqueResource(_, snapshotEveryNEvents = 10))
                     .withMessageExtractor(TakenUniqueResource.Extractor(shardingSettings.numberOfShards))
                     .withStopMessage(com.resource.domain.resource.Passivate())
                     .withAllocationStrategy(utils.newLeastShardAllocationStrategy())
@@ -142,8 +145,10 @@ object Guardian {
 
             val resourceTables: Vector[String] =
               (0 until numberOfResourceUserTables).map(i => s"resource_user$i").toVector
-            ResourceProjection.run(resources, userResource, numberOfProjSlices, resourceTables)
-            Bootstrap.run(userResource, selfAddress.host.get, grpcPort)
+
+            val askTimeout = 4.seconds
+            ResourceProjection.run(resources, userResource, numberOfProjSlices, resourceTables)(system, askTimeout)
+            Bootstrap.run(userResource, selfAddress.host.get, grpcPort)(system, akka.util.Timeout(6.seconds))
             Behaviors.same
           }
       }

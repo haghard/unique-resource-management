@@ -4,9 +4,6 @@
 1) Distributed sharded resources that can be acquired by users.
 2) Resources control transfer between users.
 
-### I-offender
-Operations that may break app level invariants when executed concurrently.
-
 ## Problem statement
 
 This app needs to support the following operations:
@@ -24,14 +21,13 @@ For example, the following sequence of operations breaks our application level i
 
 ```
 
-Client1 `Create(user=1, resource=x)` <> Client2 `Create(user=1, resource=y)`
+Client1 `Assign(usr=1, resource=x)` <> Client2 `Assign(usr=1, resource=y)`
 
 and
 
-Client1 `Update(user=2, from=x, to=y)` <> Client2 `Update(user=2, from=x, to=z)`
+Client1 `Reassign(usr=2, from=x, to=y)` <> Client2 `Reassign(usr=2, from=x, to=z)`
 
 ```
-
 
 ### Assign
 `UserId(A)` has no resources associated to it and wants to acquire `Resource(x)` only if `Resource(x)` doesn’t belong to another user.
@@ -52,12 +48,15 @@ Client1 `Update(user=2, from=x, to=y)` <> Client2 `Update(user=2, from=x, to=z)`
    unlock(UserId(1))
 ```
 
+### I-offender
+Operations that may break app level invariants when executed concurrently.
+
 
 ## Requirements
  
-✅ Application correctness and low latency for all supported operations.
+✅ Application correctness.
 
-✅ Clients are able to order their own operations and provide a globally unique ID (`user_id`).
+✅ Clients are able to provide a globally unique `userId`s.
 
 It's a relative order invariant. Resource acquisition requires a `precondition check`.  Releasing resource doesn't require any checks and should succeed eventually. Causal ordering if enough to guarantee we never violate anything in this flow.
 
@@ -68,9 +67,9 @@ It's a relative order invariant. Resource acquisition requires a `precondition c
 
 docker-compose -f docker-compose.yml up
 
-sbt a
+sbt -Dconfig.resource=local1.conf "runMain com.resource.App" 
 
-sbt b
+sbt -Dconfig.resource=local2.conf "runMain com.resource.App" 
 
 ```
 
@@ -80,9 +79,9 @@ sbt b
 
 grpcurl -plaintext 127.0.0.1:8080 list
 
-http GET 127.0.0.1:8079/resources/cluster/members
-http GET 127.0.0.2:8079/resources/cluster/shards/usr-rs
-http GET 127.0.0.2:8079/resources/cluster/shards/rs
+http GET 127.0.0.1:8558/cluster/members
+http GET 127.0.0.2:8558/cluster/shards/usr-rs
+http GET 127.0.0.2:8558/cluster/shards/rs
 
 ```
 
@@ -196,6 +195,8 @@ grpcurl -d '{"userId":"211367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.
 
 grpcurl -d '{"resource":{"name":"a","version":"a","city":"FL","state":"FL","country":"US","zipCode":"34234sd"},"user_id":"211367c3-9ad3-47ef-a6b0-784d52c96481" }' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Allocate
 
+grpcurl -d '{"resource":{"name":"a","version":1},"user_id":"211367c3-9ad3-47ef-a6b0-784d52c96482" }' -plaintext 174.138.113.57:8080 com.resource.api.ResourceService/Assign
+
 ```
 
 Another similar domain and use cases:   
@@ -206,8 +207,7 @@ Another similar domain and use cases:
    * students and course subscriptions
 
 
-
-grpcurl -d '{"resource":{"name":"a","version":1},"user_id":"211367c3-9ad3-47ef-a6b0-784d52c96482" }' -plaintext 174.138.113.57:8080 com.resource.api.ResourceService/Assign
+### kubernetes
 
 ```
 
@@ -244,13 +244,27 @@ kubectl delete pod <pod-name>
 
 
 
-### Drop all tcp traffic to simulate split brain
+### Drop all tcp/udp traffic to simulate a split brain
 ````
 
 kubectl --kubeconfig=./kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml exec -it resources-64bb48b97d-r99bz -- /bin/sh
 
-iptables -A INPUT -p tcp -j DROP
-  
+iptables -A INPUT -p tcp -j DROP  
 iptables -D INPUT -p tcp -j DROP`
 
+iptables -A INPUT -p udp -j DROP  
+iptables -D INPUT -p udp -j DROP`
+
+
+iptables -A INPUT -p udp --dport 2551 -j DROP
+iptables -D INPUT -p udp --dport 2551 -j DROP
+
+Create partition between IP 127.0.0.1 and 127.0.0.2
+iptables -A INPUT -p tcp -s 127.0.0.1 -d 127.0.0.2 -j DROP
+
+Drop partition between IP 127.0.0.1 and 127.0.0.2
+iptables -D INPUT -p tcp -s 127.0.0.1 -d 127.0.0.2 -j DROP    
+
 ```
+
+

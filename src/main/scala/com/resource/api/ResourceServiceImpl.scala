@@ -6,7 +6,7 @@ import akka.actor.typed.scaladsl.AskPattern.Askable
 import scala.concurrent.*
 import com.resource.domain.user.*
 
-import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.*
 
 final class ResourceServiceImpl(
   userResource: ActorRef[UserCmd]
@@ -18,7 +18,7 @@ final class ResourceServiceImpl(
 
   val actorRefResolver: ActorRefResolver = ActorRefResolver(system)
 
-  val retryAfter = 500.millis // TODO: config
+  val retryAfter = system.settings.config.getDuration("retry.after").toMillis.millis
 
   // val r2dbcDao = new R2dbcDao(system)
 

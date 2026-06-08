@@ -62,7 +62,7 @@ object TakenUniqueResource {
           (state, cmd) => state.applyCmd(cmd, entityId),
           (state, event) => state.applyEvt(event)
         )
-        .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = snapshotEveryNEvents, keepNSnapshots = 2))
+        .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = snapshotEveryNEvents, keepNSnapshots = 1))
         .receiveSignal {
           case (state, RecoveryCompleted) =>
             ctx.log.warn(s"★★★ RecoveryCompleted: - ${state.contentKeySeqNum.size}")

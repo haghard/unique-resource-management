@@ -6,7 +6,7 @@
 
 entity GrpcClient
 
-entity ResourceService
+entity GrpcService
 
 entity UserResourceLink_1
 
@@ -14,20 +14,20 @@ entity TakenUniqueResource_a
 
 entity Projection
 
-GrpcClient --> ResourceService: AssignReq(user=1,res=a)
-ResourceService --> UserResourceLink_1: Assign(user=1,res=a)
-UserResourceLink_1 --> UserResourceLink_1: if_available(persist(LockState(pending=Assign(user=1,res=a)))) 
-UserResourceLink_1 --> TakenUniqueResource_a: Assign(user=1,res=a)
+GrpcClient -> GrpcService:1. Assign(usr=1,res=a)
+GrpcService -> UserResourceLink_1:2. Assign(user=1,res=a)
+UserResourceLink_1 -> UserResourceLink_1:3. if_available(persist(LockState(pendingCmd=Assign(user=1,res=a)))) 
+UserResourceLink_1 -> TakenUniqueResource_a:4. Assign(usr=1,res=a)
 
 
-TakenUniqueResource_a --> TakenUniqueResource_a: if_available(persist(Assigned(user=1)))  
+TakenUniqueResource_a -> TakenUniqueResource_a:5. if_available(persist(Assigned(user=1)))  
 
 
 
-Projection --> Projection: Pulls Assigned(user=1,res=a)
-Projection --> UserResourceLink_1: Confirm(user=1,res=a, Assigned)
-UserResourceLink_1 -> UserResourceLink_1: persist(Remove(LockState())) LinkedResource(a)
-UserResourceLink_1 --> GrpcClient : Reply(OK)  
+Projection -> Projection:6. Pulls Assigned(usr=1,res=a)
+Projection -> UserResourceLink_1:7. Confirm(usr=1,res=a, Assigned)
+UserResourceLink_1 -> UserResourceLink_1:8. persist(LockState(pendingCmd=None),LinkedResource(a))
+UserResourceLink_1 -> GrpcClient:9. Reply(resourceLocation(a))  
 
 @enduml
 ```
@@ -51,20 +51,20 @@ entity Projection
 entity TakenUniqueResource_a
 
 
-GrpcClient --> ResourceService: ReassignReq(user=1,from=a,to=b)
-ResourceService --> UserResourceLink_1: Reassign(user=1,from=a,to=b)
-UserResourceLink_1 --> UserResourceLink_1: if_available(persist(LockState(pending=Reassign(user=1,from=a,to=b))
-UserResourceLink_1 --> TakenUniqueResource_b: Assigned(user=1,res=b)
-TakenUniqueResource_b --> TakenUniqueResource_b: persist(Assigned(user=1,res=b))
+GrpcClient --> ResourceService:1. ReassignReq(usr=1,from=a,to=b)
+ResourceService --> UserResourceLink_1:2. Reassign(usr=1,from_rs=a,to_rs=b)
+UserResourceLink_1 --> UserResourceLink_1:3. if_available(persist(LockState(pendingCmd=Reassign(usr=1,from_rs=a,to_rs=b))
+UserResourceLink_1 --> TakenUniqueResource_b:4. Assigned(usr=1,rs=b)
+TakenUniqueResource_b --> TakenUniqueResource_b:5. persist(Assigned(usr=1,rs=b))
 
-Projection --> Projection: Pulls Assigned(user=1,res=b)  
-Projection --> TakenUniqueResource_a:  Unassign(user=1,res=a))
-TakenUniqueResource_a --> TakenUniqueResource_a : persist(Unassigned(user=1))
+Projection --> Projection:6. Pulls Assigned(usr=1,rs=b)  
+Projection --> TakenUniqueResource_a:  Unassign(usr=1,rs=a))
+TakenUniqueResource_a --> TakenUniqueResource_a : persist(Unassigned(usr=1))
 
-Projection --> Projection: Pulls Unassign(user=1,res=a))
-Projection --> UserResourceLink_1: Confirm(user=1,from=a, to=b,Reassigned) 
-UserResourceLink_1 --> UserResourceLink_1: persist(Remove(LockState())) LinkedResource(b)
-UserResourceLink_1 --> GrpcClient : Reply(OK)
+Projection --> Projection: Pulls Unassign(usr=1,rs=a))
+Projection --> UserResourceLink_1: Confirm(usr=1,from_rs=a,to_rs=b,Reassigned) 
+UserResourceLink_1 --> UserResourceLink_1: persist(LockState(pendingCmd=None),LinkedResource(b))
+UserResourceLink_1 --> GrpcClient : Reply(resourceLocation(b))
 
 @enduml
 ```

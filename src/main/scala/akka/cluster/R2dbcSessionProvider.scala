@@ -27,25 +27,25 @@ final class R2dbcSessionProvider private (connectionFactory: ConnectionFactory, 
   system: ActorSystem[?]
 ) {
 
-  def exec[T](desc: String)(action: R2dbcSession => Future[T]): Future[T] = {
-    // TODO: another ec
+  def exec[T](desc: String)(dbAction: R2dbcSession => Future[T]): Future[T] = {
+    // TODO: Use another ec
     implicit val ec: ExecutionContext = system.executionContext
     acquireCon().flatMap { con =>
       val trxId = UUID.randomUUID()
-      val f0    =
+      log.info(s"R2dbc:1.$trxId begin $desc")
+      val f =
         for {
           _ <- toFuture(con.beginTransaction(PostgresTransactionDefinition.from(IsolationLevel.READ_COMMITTED)))
-          _ = log.info(s"R2dbc 1.$trxId begin $desc")
-          result <- action(new R2dbcSession(con))
-          _      <- toFuture(con.commitTransaction())
-          _ = log.info(s"R2dbc 2.$trxId commit")
-        } yield result
+          dbActionResult <- dbAction(new R2dbcSession(con))
+          _              <- toFuture(con.commitTransaction())
+          _ = log.info(s"R2dbc:2.$trxId commit")
+        } yield dbActionResult
 
-      f0
+      f
         .recoverWith { case NonFatal(ex) =>
           toFuture(con.rollbackTransaction())
             .recover { case NonFatal(_) =>
-              log.error(s"R2dbc 2.$trxId rollback", ex)
+              log.error(s"R2dbc:2.$trxId rollback", ex)
             }
             .flatMap(_ => Future.failed(ex))
         }
