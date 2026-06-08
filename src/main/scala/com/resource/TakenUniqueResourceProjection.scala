@@ -26,7 +26,7 @@ import scala.concurrent.Future
 
 object TakenUniqueResourceProjection {
 
-  val entityName = TakenUniqueResource.TypeKey.name
+  private val entityName = TakenUniqueResource.TypeKey.name
 
   private def sourceProvider(
     sliceRange: Range

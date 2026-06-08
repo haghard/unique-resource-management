@@ -50,20 +50,20 @@ final class ResourceServiceImpl(
     }
   }
 
-  def release(
-    request: com.resource.api.ReleaseResourceRequest
+  override def release(
+    releaseRequest: com.resource.api.ReleaseResourceRequest
   ): scala.concurrent.Future[com.resource.api.ResourceReply] = {
     val requestId = Kamon.currentSpan().trace.id.string
-    logger.info(s"[$requestId] release=${request.userId}")
+    logger.info(s"[$requestId] release=${releaseRequest.userId}")
     Kamon.span("grpc-release") {
       Kamon
         .currentSpan()
-        .tag("userId", request.userId)
+        .tag("userId", releaseRequest.userId)
         .tag("requestId", requestId)
 
       userResource
         .askWithStatus[ResourceReply] { replyTo =>
-          Release(request.userId, request.location, actorRefResolver.toSerializationFormat(replyTo))
+          Release(releaseRequest.userId, releaseRequest.location, actorRefResolver.toSerializationFormat(replyTo))
         }
     }
   }

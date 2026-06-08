@@ -194,10 +194,11 @@ grpcurl -d '{"resource":{"name":"c1","version":2},"userId":"211367c3-9ad3-47ef-a
 grpcurl -d '{"resource":{"name":"d1","version":2},"userId":"211367c3-9ad3-47ef-a6b0-784d52c96492","location":{"bucketId":"591900785108084723","seqNum":"0"}}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Reassign
 grpcurl -d '{"resource":{"name":"e1","version":2},"userId":"211367c3-9ad3-47ef-a6b0-784d52c96492","location":{"bucketId":"-4373920888234706083","seqNum":"0"}}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/Reassign
 
+grpcurl -d '{"userId":"211367c3-9ad3-47ef-a6b0-784d52c96492"}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/GetResource
+
 grpcurl -d '{"location":{"bucketId":"5800016335066854875","seqNum":0},"user_id":"211367c3-9ad3-47ef-a6b0-784d52c96492"}' -plaintext 127.0.0.2:8080 com.resource.api.ResourceService/Release
 
 
-grpcurl -d '{"userId":"211367c3-9ad3-47ef-a6b0-784d52c96489"}' -plaintext 127.0.0.1:8080 com.resource.api.ResourceService/GetResource
 grpcurl -d '{"location":{"bucketId":"-4373920888234706083","seqNum": "1"},"user_id":"111367c3-9ad3-47ef-a6b0-784d52c96481"}' -plaintext 127.0.0.2:8080 com.resource.api.ResourceService/Release
 
 

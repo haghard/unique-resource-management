@@ -19,7 +19,7 @@ import scala.concurrent.Future
 
 object UserResourceLinkProjection {
 
-  val entityName = UserResource.TypeKey.name
+  private val entityName = UserResource.TypeKey.name
 
   private def sourceProvider(
     sliceRange: Range
