@@ -1,5 +1,7 @@
 
-### Assign
+## 1. Assign a resource to a user (happy case scenario)
+
+Assign `resource(a)` to `user(1)`
 
 ```plantuml
 @startuml
@@ -14,18 +16,13 @@ entity TakenUniqueResource_a
 
 entity Projection
 
-GrpcClient -> GrpcService:1. Assign(usr=1,res=a)
-GrpcService -> UserResourceLink_1:2. Assign(user=1,res=a)
-UserResourceLink_1 -> UserResourceLink_1:3. if_available(persist(LockState(pendingCmd=Assign(user=1,res=a)))) 
-UserResourceLink_1 -> TakenUniqueResource_a:4. Assign(usr=1,res=a)
-
-
+GrpcClient -> GrpcService:1. Assign(usr=1,rs=a)
+GrpcService -> UserResourceLink_1:2. Assign(user=1,rs=a)
+UserResourceLink_1 -> UserResourceLink_1:3. if(no_active_lock && rs=a)(persist(LockState(pendingCmd=Assign(user=1,rs=a)))) 
+UserResourceLink_1 -> TakenUniqueResource_a:4. Assign(usr=1,rs=a)
 TakenUniqueResource_a -> TakenUniqueResource_a:5. if_available(persist(Assigned(user=1)))  
-
-
-
-Projection -> Projection:6. Pulls Assigned(usr=1,res=a)
-Projection -> UserResourceLink_1:7. Confirm(usr=1,res=a, Assigned)
+Projection -> Projection:6. Pulls Assigned(usr=1,rs=a)
+Projection -> UserResourceLink_1:7. Confirm(usr=1,rs=a, Assigned)
 UserResourceLink_1 -> UserResourceLink_1:8. persist(LockState(pendingCmd=None),LinkedResource(a))
 UserResourceLink_1 -> GrpcClient:9. Reply(resourceLocation(a))  
 
@@ -33,7 +30,48 @@ UserResourceLink_1 -> GrpcClient:9. Reply(resourceLocation(a))
 ```
 
 
-### Reassign
+### 2. Release a resource (happy case scenario)
+Given `user(1)` is linked to `resource(a)`
+
+`user(1)` should release `resource(a)`
+
+
+```plantuml
+@startuml
+
+entity GrpcClient
+
+entity GrpcService
+
+entity UserResourceLink_1
+
+entity TakenUniqueResource_a
+
+entity Projection
+
+GrpcClient -> GrpcService:1. Release(usr=1,rs=a)
+GrpcService -> UserResourceLink_1:2. Unassign(user=1,res=a)
+UserResourceLink_1 -> UserResourceLink_1:3. if(no_active_lock && rs=a)(persist(LockState(pendingCmd=Release(usr=1,rs=a)))) 
+UserResourceLink_1 -> TakenUniqueResource_a:4. Release(usr=1,res=a)
+TakenUniqueResource_a -> TakenUniqueResource_a:5. persist(Unassigned(usr=1))  
+Projection -> Projection:6. Pulls Unassigned(usr=1,rs=a)
+Projection -> UserResourceLink_1:7. Confirm(usr=1,rs=a,Assigned)
+UserResourceLink_1 -> UserResourceLink_1:8. persist(LockState(pendingCmd=None), linkedRs=None))
+UserResourceLink_1 -> GrpcClient:9. Reply(resourceLocation(a))  
+
+@enduml
+```
+
+
+
+### 3. Reassign a resource to a user (happy case scenario)
+
+It is a 2-step operation. Given `user(1)` is linked to `resource(b)` we need to do the following:
+
+a) Assign `resource(b)` to `user(1)`
+
+b) Unassign `resource(a)` from `user(1)`
+
 
 ```plantuml
 @startuml
@@ -53,7 +91,7 @@ entity TakenUniqueResource_a
 
 GrpcClient --> ResourceService:1. ReassignReq(usr=1,from=a,to=b)
 ResourceService --> UserResourceLink_1:2. Reassign(usr=1,from_rs=a,to_rs=b)
-UserResourceLink_1 --> UserResourceLink_1:3. if_available(persist(LockState(pendingCmd=Reassign(usr=1,from_rs=a,to_rs=b))
+UserResourceLink_1 --> UserResourceLink_1:3. if(no_active_lock && rs=a)(persist(LockState(pendingCmd=Reassign(usr=1,from_rs=a,to_rs=b))
 UserResourceLink_1 --> TakenUniqueResource_b:4. Assigned(usr=1,rs=b)
 TakenUniqueResource_b --> TakenUniqueResource_b:5. persist(Assigned(usr=1,rs=b))
 

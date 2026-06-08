@@ -7,3 +7,4 @@ logs
 /pgdata18/
 /.sbtopts
 /zipkin-db-data
+/kubernetes/k8s-1-31-1-do-3-tor1-1729544104597-kubeconfig.yaml
