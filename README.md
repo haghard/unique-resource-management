@@ -1,6 +1,6 @@
 ## Unique resources tracking app
 
-### Distributed sharded resources that support Compare-And-Set style of operation
+### Distributed sharded resources that support Compare-And-Set style of operations
 1) Distributed sharded resources that can be acquired by users.
 2) Resources control transfer between users.
 
@@ -54,9 +54,13 @@ Client1 `Update(user=2, from=x, to=y)` <> Client2 `Update(user=2, from=x, to=z)`
 ```
 
 
-## Requirements
+## Design ideas and requirements
+
+✅ This system non-transactionally comes to a mutually agreeable series of state changes. 
+
+✅ Read-Your-Writes.
  
-✅ Application correctness
+✅ Application correctness.
 
 ✅ Clients are able to order their own operations and provide a globally unique ID (`user_id`).
 
