@@ -22,9 +22,9 @@ entity TakenResProj
 
 GrpcClient -> Service:1. Assign(user=1,rs=a)
 Service -> UsrRes_1:2. Assign(user=1,rs=a)
-UsrRes_1 -> UsrRes_1:3. if_no_active_lock persist(LockState(pending=Assign(user=1,rs=a))) 
+UsrRes_1 -> UsrRes_1:3. if(no_active_lock && linkedRs=None) persist(LockState(pending=Assign(user=1,rs=a))) 
 
-UsrResProj -> UsrResProj:4. Pulls DurableStateChange(lockState) 
+UsrResProj --> UsrResProj:4. DurableStateChange(lockState) 
 UsrResProj -> TakenRes_a:5. Assign(user=1,rs=a) 
 
 TakenRes_a -> TakenRes_a:6. if_available(persist(Assigned(user=1)))  
@@ -65,19 +65,19 @@ GrpcService -> UsrRes_1: 2. Unassign(usr=1,rs=a)
 
 UsrRes_1 -> UsrRes_1: 3. if(no_active_lock && rs=a) persist(LockState(pending=Release(usr=1,rs=a))) 
 
-UsrResProj -> UsrResProj: 4. Pulls DurableStateChange(lockState) 
+UsrResProj --> UsrResProj: 4. DurableStateChange(lockState) 
 
 UsrResProj -> TakenRes_a: 5. Release(usr=1,rs=a) 
 
 TakenRes_a -> TakenRes_a: 6. persist(Unassigned(usr=1))
 
-TakenResProj -> TakenResProj: 7. Pulls Unassigned(usr=1,rs=a)
+TakenResProj --> TakenResProj: 7. Unassigned(usr=1,rs=a)
 
-TakenResProj -> UsrRes_1: 7. Confirm(usr=1,rs=a, Unassigned)
+TakenResProj -> UsrRes_1: 8. Confirm(usr=1,rs=a, Unassigned)
 
-UsrRes_1 -> UsrRes_1: 8. persist(LockState(pendingCmd=None), linkedRs=None))
+UsrRes_1 -> UsrRes_1: 9. persist(LockState(pendingCmd=None), linkedRs=None))
 
-UsrRes_1 -> GrpcClient: 9. Reply(OK)  
+UsrRes_1 -> GrpcClient: 10. Reply(OK)  
 
 @enduml
 ```
@@ -107,24 +107,24 @@ entity TakenResProj
 entity TakenRes_a
 
 
-GrpcClient --> Service:1. Reassign(usr=1,from=a,to=b)
-Service --> UsrRes_1:2. Reassign(usr=1,from=a,to=b)
-UsrRes_1 --> UsrRes_1:3. if_no_active_lock persist(LockState(pending=Reassign(usr=1,from=a,to=b)
+GrpcClient -> Service:1. Reassign(usr=1,from=a,to=b)
+Service -> UsrRes_1:2. Reassign(usr=1,from=a,to=b)
+UsrRes_1 -> UsrRes_1:3. if(no_active_lock && linkedRs=a) persist(LockState(pending=Reassign(usr=1,from=a,to=b)
 
-UsrResProj --> UsrResProj:4. Pulls DurableStateChange(lockState)
+UsrResProj --> UsrResProj:4. DurableStateChange(lockState)
 
-UsrResProj --> TakenRes_b:5. Reassign(usr=1,from=a,to=b)  
+UsrResProj -> TakenRes_b:5. Reassign(usr=1,from=a,to=b)  
 
-TakenRes_b --> TakenRes_b:6. if_available persist(Assigned(user=1,rs=b))
+TakenRes_b -> TakenRes_b:6. if_available persist(Assigned(user=1,rs=b))
 
-TakenResProj --> TakenResProj:7. Pulls Assigned(user=1,rs=b)  
-TakenResProj --> TakenRes_a:8. Unassign(user=1,rs=a))
-TakenRes_a --> TakenRes_a:9. persist(Unassigned(usr=1))
+TakenResProj --> TakenResProj:7. Assigned(user=1,rs=b)  
+TakenResProj -> TakenRes_a:8. Unassign(user=1,rs=a))
+TakenRes_a -> TakenRes_a:9. persist(Unassigned(usr=1))
 
 TakenResProj --> TakenResProj:10. Pulls Unassign(usr=1,rs=a))
-TakenResProj --> UsrRes_1:11. Confirm(user=1,from=a, to=b,Reassigned) 
-UsrRes_1 --> UsrRes_1:12. persist(Remove(LockState()), LinkedResource(b))
-UsrRes_1 --> GrpcClient:13. Reply(OK)
+TakenResProj -> UsrRes_1:11. Confirm(user=1,from=a, to=b,Reassigned) 
+UsrRes_1 -> UsrRes_1:12. persist(Remove(LockState()), LinkedResource(b))
+UsrRes_1 -> GrpcClient:13. Reply(OK)
 
 @enduml
 ```
