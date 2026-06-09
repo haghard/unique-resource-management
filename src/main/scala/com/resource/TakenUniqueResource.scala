@@ -219,10 +219,10 @@ object TakenUniqueResource {
       event match {
         case Assigned(userId, resource, seqNum, _, _) =>
           ctx.log.info("Acquired({}) by {}/{}", resource.uniqueKey, userId, seqNum)
-          val updatedMap = pbState.contentKeySeqNum + (resource.uniqueKey -> seqNum)
+          val updatedBucket = pbState.contentKeySeqNum + (resource.uniqueKey -> seqNum)
           pbState
             .update(
-              _.contentKeySeqNum := updatedMap,
+              _.contentKeySeqNum := updatedBucket,
               _.optionalUserId   := Some(userId)
             )
 
@@ -234,9 +234,9 @@ object TakenUniqueResource {
             } match {
             case Some(resourceKey) =>
               ctx.log.info("Unassigned({}) {}/{}", resourceKey, userId, releasedLocation.seqNum)
-              val updated = pbState.contentKeySeqNum - resourceKey
+              val updatedBucket = pbState.contentKeySeqNum - resourceKey
               pbState.update(
-                _.contentKeySeqNum := updated,
+                _.contentKeySeqNum := updatedBucket,
                 _.optionalUserId   := None
               )
             case None =>
@@ -251,16 +251,15 @@ object TakenUniqueResource {
             } match {
             case Some(resourceKey) =>
               ctx.log.info("Released({}) {}/{}", resourceKey, userId, releasedLocation.seqNum)
-              val updated = pbState.contentKeySeqNum - resourceKey
+              val updatedBucket = pbState.contentKeySeqNum - resourceKey
               pbState.update(
-                _.contentKeySeqNum := updated,
+                _.contentKeySeqNum := updatedBucket,
                 _.optionalUserId   := None
               )
             case None =>
               pbState
           }
 
-        // case _: AssignConflicted => pbState
         case com.resource.domain.resource.ResourceEvent.Empty =>
           pbState
       }

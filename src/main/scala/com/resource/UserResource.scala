@@ -119,7 +119,8 @@ object UserResource {
 
                 case None =>
                   val cmdSeqNum = DurableStateBehavior.lastSequenceNumber(ctx)
-                  ctx.log.warn(s"Lock [$userId/${ResponseTag.Assigned}/$cmdSeqNum = ${resourceToAssign.uniqueKey}]")
+                  val lockDesc  = s"$userId/${ResponseTag.Assigned}/$cmdSeqNum"
+                  ctx.log.warn(s"Acquire lock:$lockDesc")
                   val pendingCmd =
                     resource.Assign(
                       assign.userId,
@@ -150,7 +151,8 @@ object UserResource {
                 case Some(linked) =>
                   if (linked.location == location) {
                     val cmdSeqNum = DurableStateBehavior.lastSequenceNumber(ctx)
-                    ctx.log.warn(s"Lock [$userId/${ResponseTag.Unassigned}/$cmdSeqNum = ${linked.resource.uniqueKey}]")
+                    val lockDesc  = s"$userId/${ResponseTag.Unassigned}/$cmdSeqNum"
+                    ctx.log.warn(s"Acquire lock:$lockDesc")
 
                     val pc =
                       resource.Release(
@@ -206,9 +208,8 @@ object UserResource {
                         }
                     } else {
                       val cmdSeqNum = DurableStateBehavior.lastSequenceNumber(ctx)
-                      ctx.log.warn(
-                        s"Lock [$userId/${ResponseTag.Reassigned}/$cmdSeqNum = ${resourceToAssign.uniqueKey}]"
-                      )
+                      val lockDesc  = s"$userId/${ResponseTag.Reassigned}/$cmdSeqNum"
+                      ctx.log.warn(s"Acquire lock: $lockDesc")
 
                       val pc =
                         resource.Reassign(
@@ -286,26 +287,25 @@ object UserResource {
                       pbState -> StatusReply.error("Unexpected " + classOf[ResponseTag].getName)
                   }
 
-                val key = s"$userId/$responseTag/$cmdSeqNum = ${resource.uniqueKey}"
-
                 Effect
                   .persist(updatedState)
                   .thenRun { _ =>
-                    ctx.log.warn(s"Unlock [$key}]")
                     if (projection.nonEmpty) {
-                      ctx.log.info(s"Confirm $cmdSeqNum")
                       projectionToReply.tell(StatusReply.success(akka.Done))
                     }
                   }
                   .thenReply(refResolver.resolveActorRef(grpcClient)) { _: UserResourceState =>
-                    ctx.log.info(s"Released ${responseTag.name}-lock / ${updatedState.linkedResource.getOrElse("")}")
+                    val lockDesc = s"$userId/$responseTag/$cmdSeqNum"
+                    ctx.log.warn(
+                      s"Release lock:$lockDesc. ${updatedState.linkedResource.map(_.resource.uniqueKey).getOrElse("")}"
+                    )
                     statusReply
                   }
               } else if (pendingCmdSeqNum > cmdSeqNum) {
                 Effect.none
                   .thenRun { _: UserResourceState =>
                     if (projection.nonEmpty) {
-                      ctx.log.info(s"Reconfirm old cmd $cmdSeqNum")
+                      ctx.log.info(s"Reconfirm $cmdSeqNum")
                       projectionToReply.tell(StatusReply.success(akka.Done))
                     }
                   }
@@ -313,7 +313,7 @@ object UserResource {
               } else {
                 Effect.none
                   .thenRun { _: UserResourceState =>
-                    ctx.log.warn(s"Got Confirm(${cmdSeqNum}) but ${pendingCmdSeqNum} expected")
+                    ctx.log.warn(s"Got Confirm($cmdSeqNum) but ${pendingCmdSeqNum} expected")
                   }
                   .thenNoReply()
               }
@@ -322,7 +322,7 @@ object UserResource {
               Effect.none
                 .thenRun { _: UserResourceState =>
                   if (projection.nonEmpty) {
-                    ctx.log.info(s"Reconfirm(${cmdSeqNum})")
+                    ctx.log.info(s"Reconfirm($cmdSeqNum)")
                     projectionToReply.tell(StatusReply.success(akka.Done))
                   }
                 }

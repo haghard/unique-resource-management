@@ -7,20 +7,22 @@ import scala.concurrent.*
 import com.resource.domain.user.*
 import kamon.Kamon
 
-import scala.concurrent.duration.DurationInt
+import scala.concurrent.duration.*
 
 final class ResourceServiceImpl(
   userResource: ActorRef[UserCmd]
-)(implicit system: ActorSystem[_], timeout: akka.util.Timeout)
+)(implicit system: ActorSystem[?], timeout: akka.util.Timeout)
     extends ResourceService {
 
   implicit val sch: Scheduler       = system.scheduler
   implicit val ec: ExecutionContext = system.executionContext
 
+  val logger                             = system.log
   val actorRefResolver: ActorRefResolver = ActorRefResolver(system)
 
-  val retryAfter = 500.millis // TODO: config
-  val logger     = system.log
+  val retryAfter = system.settings.config.getDuration("retry.after").toMillis.millis
+
+  // val r2dbcDao = new R2dbcDao(system)
 
   override def assign(request: AssignResourceRequest): Future[ResourceReply] = {
     val requestId = Kamon.currentSpan().trace.id.string
@@ -43,28 +45,27 @@ final class ResourceServiceImpl(
                   Assign(request.userId, request.resource, actorRefResolver.toSerializationFormat(replyTo))
                 )
             )
-          else {
+          else
             Future.successful(reply)
-          }
         }
     }
   }
 
-  override def release(
-    releaseRequest: com.resource.api.ReleaseResourceRequest
+  def release(
+    request: com.resource.api.ReleaseResourceRequest
   ): scala.concurrent.Future[com.resource.api.ResourceReply] = {
     val requestId = Kamon.currentSpan().trace.id.string
-    logger.info(s"[$requestId] release=${releaseRequest.userId}")
+    logger.info(s"[$requestId] release=${request.userId}")
     Kamon.span("grpc-release") {
       Kamon
         .currentSpan()
-        .tag("userId", releaseRequest.userId)
+        .tag("userId", request.userId)
         .tag("requestId", requestId)
 
       userResource
-        .askWithStatus[ResourceReply] { replyTo =>
-          Release(releaseRequest.userId, releaseRequest.location, actorRefResolver.toSerializationFormat(replyTo))
-        }
+        .askWithStatus[ResourceReply](replyTo =>
+          Release(request.userId, request.location, actorRefResolver.toSerializationFormat(replyTo))
+        )
     }
   }
 
@@ -99,9 +100,8 @@ final class ResourceServiceImpl(
                   )
                 )
             )
-          else {
+          else
             Future.successful(reply)
-          }
         }
     }
   }

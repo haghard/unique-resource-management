@@ -69,9 +69,17 @@ It's a relative order invariant. Resource acquisition requires a `precondition c
 
 docker-compose -f docker-compose.yml up
 
+OR
+
+docker-compose -f docker-compose2.yml up #zipkin 
+
+
+
 sbt -Dconfig.resource=local1.conf "runMain com.resource.App" 
 
 sbt -Dconfig.resource=local2.conf "runMain com.resource.App" 
+
+sbt -Dconfig.resource=local3.conf "runMain com.resource.App"
 
 ```
 
