@@ -89,7 +89,7 @@ object TakenUniqueResource {
       cmd match {
         case resource.Assign(userId, resource, pendingCmdSeqNum, replyTo) =>
           val userResourceLinkRef = resolver.resolveActorRef(replyTo)
-          ctx.log.info(s"★★★ Assign(${resource.uniqueKey}), user:$userId / $userResourceLinkRef")
+          ctx.log.info(s"★★★ Assign(${resource.uniqueKey}), user:$userId")
           // Thread.sleep(800) // for local testing
 
           /*if (scala.util.Random.nextDouble() < .6) {
