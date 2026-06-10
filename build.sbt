@@ -45,7 +45,7 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka.management" %%  "akka-lease-kubernetes"             % AkkaManagementVersion,
   "com.lightbend.akka.discovery"  %%  "akka-discovery-kubernetes-api"     % AkkaManagementVersion,
 
-  "ch.qos.logback" % "logback-classic" % "1.5.32",
+  "ch.qos.logback" % "logback-classic" % "1.5.34",
   "org.slf4j"      % "slf4j-api"       %  "2.0.18",
 
   "io.aeron" % "aeron-driver" % "1.46.9", //1.47.0
@@ -109,11 +109,7 @@ javaOptions ++= Seq(
   "-XX:NativeMemoryTracking=summary", // detail
 
   "-XX:ActiveProcessorCount=6",
-
   "-XX:+UseZGC",
-  //"--add-opens",  "java.base/java.nio=ALL-UNNAMED",
-  //"--add-opens",  "java.base/sun.nio.ch=ALL-UNNAMED",
-
   "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED",
   "--add-opens=java.base/java.lang=ALL-UNNAMED",
   "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED",

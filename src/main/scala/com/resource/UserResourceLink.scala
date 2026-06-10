@@ -39,7 +39,7 @@ object UserResourceLink {
               c.userId
             case c: Confirm =>
               c.userId
-            case com.resource.domain.user.Passivate() | RedeliveryTick() | UserCmd.Empty =>
+            case com.resource.domain.user.Passivate() | RedeliveryTick(_) | UserCmd.Empty =>
               throw new Exception(s"Unsupported cmd")
           }
 
@@ -83,14 +83,14 @@ object UserResourceLink {
   implicit class UserResourceLinkOps(val pbState: UserResourceState) extends AnyVal {
 
     def redeliver(
-      userId: String,
+      lockDesc: String,
       uniqueResources: ActorRef[resource.ResourceCmd],
       redeliverAfter: FiniteDuration
     )(implicit timer: TimerScheduler[UserCmd], logger: Logger): Unit =
       pbState.lockState.foreach { ls =>
         uniqueResources.tell(ls.pendingCmd)
-        logger.info("Redeliver {}", ls.pendingCmd)
-        timer.startSingleTimer(userId + "@" + ls.pendingCmd, RedeliveryTick(), redeliverAfter)
+        logger.info("Redeliver {}", lockDesc)
+        timer.startSingleTimer(lockDesc, RedeliveryTick(lockDesc), redeliverAfter)
       }
 
     def applyCmd(
@@ -160,7 +160,7 @@ object UserResourceLink {
                     .persist(updatedState)
                     .thenRun { _: UserResourceState =>
                       uniqueResources.tell(pendingCmd)
-                      timer.startSingleTimer(lockDesc, RedeliveryTick(), redeliverAfter)
+                      timer.startSingleTimer(lockDesc, RedeliveryTick(lockDesc), redeliverAfter)
                     }
                     .thenNoReply()
               }
@@ -199,7 +199,7 @@ object UserResourceLink {
                       .persist(updatedState)
                       .thenRun { _: UserResourceState =>
                         uniqueResources.tell(pc)
-                        timer.startSingleTimer(lockDesc, RedeliveryTick(), redeliverAfter)
+                        timer.startSingleTimer(lockDesc, RedeliveryTick(lockDesc), redeliverAfter)
                       }
                       .thenNoReply()
                   } else {
@@ -260,7 +260,7 @@ object UserResourceLink {
                         .persist(updatedState)
                         .thenRun { _: UserResourceState =>
                           uniqueResources.tell(pc)
-                          timer.startSingleTimer(lockDesc, RedeliveryTick(), redeliverAfter)
+                          timer.startSingleTimer(lockDesc, RedeliveryTick(lockDesc), redeliverAfter)
                         }
                         .thenNoReply()
                     }
@@ -336,7 +336,7 @@ object UserResourceLink {
                   }
                   .thenReply(refResolver.resolveActorRef(grpcClient)) { _: UserResourceState =>
                     ctx.log.warn(
-                      s"Release lock [$userId/$requestTag/$cmdSeqNum]. ${updatedState.linkedResource.getOrElse("")}"
+                      s"Release lock:[$userId/$requestTag/$cmdSeqNum]. ${updatedState.linkedResource.map(_.resource.uniqueKey).getOrElse("")}"
                     )
                     statusReply
                   }
@@ -368,11 +368,11 @@ object UserResourceLink {
                 .thenNoReply()
           }
 
-        case RedeliveryTick() =>
+        case RedeliveryTick(lockDesc) =>
           Effect
             .none[UserResourceState]
             .thenRun { _ =>
-              pbState.redeliver(userId, uniqueResources, redeliverAfter)
+              pbState.redeliver(lockDesc, uniqueResources, redeliverAfter)
             }
             .thenNoReply()
 

@@ -63,7 +63,9 @@ message Confirm {
 
 message Passivate {}
 
-message RedeliveryTick {}
+message RedeliveryTick {
+  string lock_desc = 1;
+}
 
 message GetResource {
   string user_id = 1;

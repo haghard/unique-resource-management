@@ -227,7 +227,7 @@ object TakenUniqueResource {
         case resource.Passivate() =>
           Effect
             .none[ResourceEvent, TakenResourceState]
-            .thenRun(_ => ctx.log.info(s"Passivated: ${pbState.contentKeySeqNum.size}"))
+            .thenRun(_ => ctx.log.info("Passivated"))
             .thenStop()
             .thenNoReply()
 
