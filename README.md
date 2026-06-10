@@ -1,18 +1,22 @@
 ## Unique resources tracking app
 
 ### Distributed sharded resources that support Compare-And-Set style of operation
+ 
 1) Distributed sharded resources that can be acquired by users.
-2) Resources control transfer between users.
+ 
+2) Resource assignment transfer between users:
 
-## Problem statement
+   a) Users can release their resource.
+ 
+   b) Released resources can be claimed by other users as soon as it get released.
 
 This app needs to support the following operations:
 
 `Assign(user, resource)`
 
-`Unassign(user, resource_location)`
+`Unassign(user, current_resource_location)`
 
-`Reassign(user, prev_resource_location, new_resource)`
+`Reassign(user, current_resource_location, resource)`
 
 across many client and users. App level invariant we want to obtain: Each unique resource belongs to exactly one user at any point in time.
 Resources are not permanently assigned; even after assignment to a user, they can be reassigned to another user.
@@ -74,6 +78,8 @@ docker-compose -f docker-compose.yml up
 sbt -Dconfig.resource=local1.conf "runMain com.resource.App" 
 
 sbt -Dconfig.resource=local2.conf "runMain com.resource.App" 
+
+sbt -Dconfig.resource=local3.conf "runMain com.resource.App"
 
 ```
 

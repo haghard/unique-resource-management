@@ -12,7 +12,7 @@ import akka.stream.scaladsl.*
 import akka.stream.typed.scaladsl.ActorSource
 import com.resource.TakenUniqueResource
 
-object utils {
+object shardingUtils {
 
   def newLeastShardAllocationStrategy() = {
     val leastShardAllocationNew: akka.cluster.sharding.internal.LeastShardAllocationStrategy =
@@ -22,10 +22,10 @@ object utils {
     leastShardAllocationNew
   }
 
-  val typeName: String    = TakenUniqueResource.TypeKey.name
-  val CoordinatorStateKey = LWWRegisterKey[ShardCoordinator.Internal.State](s"${typeName}CoordinatorState")
+  private val typeName: String    = TakenUniqueResource.TypeKey.name
+  private val CoordinatorStateKey = LWWRegisterKey[ShardCoordinator.Internal.State](s"${typeName}CoordinatorState")
 
-  def shardingStateChanges(dDataShardReplicator: ActorRef, selfHost: String)(implicit
+  def shardingStateChangesTracker(dDataShardReplicator: ActorRef, selfHost: String)(implicit
     sys: ActorSystem[_]
   ): KillSwitch = {
     val actorWatchingFlow =
@@ -34,7 +34,7 @@ object utils {
         .buffer(1, OverflowStrategy.backpressure)
 
     type ShardCoordinatorState = LWWRegister[akka.cluster.sharding.ShardCoordinator.Internal.State]
-    val (actorSource, src) =
+    val (ddataSubscriber, ddataSubscriberSource) =
       ActorSource
         .actorRef[Replicator.SubscribeResponse[ShardCoordinatorState]](
           completionMatcher = { case _: Replicator.Deleted[ShardCoordinatorState] =>
@@ -46,9 +46,9 @@ object utils {
         )
         .preMaterialize()
 
-    dDataShardReplicator ! Replicator.Subscribe(CoordinatorStateKey, actorSource.toClassic)
+    dDataShardReplicator ! Replicator.Subscribe(CoordinatorStateKey, ddataSubscriber.toClassic)
 
-    src
+    ddataSubscriberSource
       .collect { case value @ Replicator.Changed(_) =>
         val shardCoordinatorState: ShardCoordinator.Internal.State = value.get(CoordinatorStateKey).value
         new StringBuilder()
@@ -59,7 +59,7 @@ object utils {
           // .append(state.shards.map { case (k, ar) => s"$k:${ar.path.address.host.getOrElse(selfHost)}" }.mkString(","))
           // .append("]")
           // .append("\n")
-          .append(s"ShardCoordinatorState($selfHost) updated [ ")
+          .append(s"$typeName ${classOf[ShardCoordinator.Internal.State].getName}($selfHost) updated [ ")
           .append(
             shardCoordinatorState.regions
               .map { case (sr, shards) => s"${sr.path.address.host.getOrElse(selfHost)}:[${shards.mkString(",")}]" }
@@ -70,14 +70,14 @@ object utils {
       }
       .via(actorWatchingFlow)
       .viaMat(KillSwitches.single)(Keep.right)
-      .to(Sink.foreach(stateLine => sys.log.warn(stateLine)))
+      .to(Sink.foreach(stateInfo => sys.log.warn(stateInfo)))
       .withAttributes(
         ActorAttributes.supervisionStrategy {
           case ex: akka.stream.WatchedActorTerminatedException =>
             sys.log.error("Replicator failed. Terminate stream", ex)
             Supervision.Stop
           case ex: Throwable =>
-            sys.log.error("Unexpected error!", ex)
+            sys.log.error("Unexpected error", ex)
             Supervision.Stop
         }
       )

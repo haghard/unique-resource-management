@@ -1,7 +1,5 @@
 package com.resource
 
-import akka.actor.RootActorPath
-import akka.actor.typed.scaladsl.adapter.TypedActorSystemOps
 import akka.actor.typed.scaladsl.Behaviors
 import akka.actor.typed.*
 import akka.cluster.ddata.SelfUniqueAddress
@@ -116,7 +114,7 @@ object Guardian {
                   Entity(TakenUniqueResource.TypeKey)(TakenUniqueResource(_, snapshotEveryNEvents = 10))
                     .withMessageExtractor(TakenUniqueResource.Extractor(shardingSettings.numberOfShards))
                     .withStopMessage(com.resource.domain.resource.Passivate())
-                    .withAllocationStrategy(utils.newLeastShardAllocationStrategy())
+                    .withAllocationStrategy(shardingUtils.newLeastShardAllocationStrategy())
                 )
 
             val userResource: ActorRef[UserCmd] =
@@ -125,29 +123,17 @@ object Guardian {
                   Entity(UserResourceLink.TypeKey)(UserResourceLink(_, resources))
                     .withMessageExtractor(UserResourceLink.Extractor(shardingSettings.numberOfShards))
                     .withStopMessage(com.resource.domain.user.Passivate())
-                    .withAllocationStrategy(utils.newLeastShardAllocationStrategy())
+                    .withAllocationStrategy(shardingUtils.newLeastShardAllocationStrategy())
                 )
 
             val numberOfResourceUserTables = system.settings.config.getInt("number-of-resource-tables")
             val numberOfProjSlices         = system.settings.config.getInt("akka.projection.r2dbc.number-of-slices")
 
-            // Looks up the replicator that is being used by [[akka.cluster.sharding.DDataShardCoordinator]]
-            val dDataShardReplicatorPath =
-              RootActorPath(system.deadLetters.path.address) / "system" / "sharding" / "replicator"
-
-            system.toClassic
-              .actorSelection(dDataShardReplicatorPath)
-              .resolveOne(5.seconds)
-              .foreach { dDataShardReplicator =>
-                akka.cluster.utils
-                  .shardingStateChanges(dDataShardReplicator, cluster.selfMember.address.host.getOrElse("local"))
-              }(system.executionContext)
-
-            val resourceTables: Vector[String] =
+            val resourceUserTables: Vector[String] =
               (0 until numberOfResourceUserTables).map(i => s"resource_user$i").toVector
 
             val askTimeout = 4.seconds
-            ResourceProjection.run(resources, userResource, numberOfProjSlices, resourceTables)(system, askTimeout)
+            ResourceProjection.run(resources, userResource, numberOfProjSlices, resourceUserTables)(system, askTimeout)
             Bootstrap.run(userResource, selfAddress.host.get, grpcPort)(system, akka.util.Timeout(6.seconds))
             Behaviors.same
           }

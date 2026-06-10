@@ -22,7 +22,7 @@ import scala.concurrent.duration.*
   */
 object UserResourceLink {
 
-  val TypeKey: EntityTypeKey[UserCmd] = EntityTypeKey[UserCmd](name = "usr-rs")
+  val TypeKey: EntityTypeKey[UserCmd] = EntityTypeKey[UserCmd](name = "usr-rs-lnk")
 
   object Extractor {
     def apply(numberOfShards: Int): ShardingMessageExtractor[UserCmd, UserCmd] =
@@ -243,8 +243,7 @@ object UserResourceLink {
                         }
                     } else {
                       val cmdSeqNum = DurableStateBehavior.lastSequenceNumber(ctx)
-
-                      val lockDesc = s"$userId/${ResponseTag.Reassigned}/$cmdSeqNum"
+                      val lockDesc  = s"$userId/${ResponseTag.Reassigned}/$cmdSeqNum"
                       ctx.log.warn(s"Acquire lock:[$lockDesc]")
                       val pc =
                         resource.Reassign(
@@ -336,7 +335,7 @@ object UserResourceLink {
                   }
                   .thenReply(refResolver.resolveActorRef(grpcClient)) { _: UserResourceState =>
                     ctx.log.warn(
-                      s"Release lock:[$userId/$requestTag/$cmdSeqNum]. ${updatedState.linkedResource.map(_.resource.uniqueKey).getOrElse("")}"
+                      s"Release lock:[$userId/$requestTag/$cmdSeqNum].Resource:${updatedState.linkedResource.map(_.resource.uniqueKey).getOrElse("")}"
                     )
                     statusReply
                   }

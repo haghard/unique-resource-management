@@ -2,15 +2,16 @@ package com.resource
 
 import akka.Done
 import akka.actor.typed.*
-import akka.actor.CoordinatedShutdown
+import akka.actor.{CoordinatedShutdown, RootActorPath}
 import akka.actor.CoordinatedShutdown.*
+import akka.actor.typed.scaladsl.adapter.TypedActorSystemOps
 import akka.http.scaladsl.Http
 import akka.http.scaladsl.model.*
 import com.resource.api.*
 import com.resource.domain.user.*
 
-import scala.concurrent.duration.Duration
-import scala.concurrent.Future
+import scala.concurrent.duration.{Duration, DurationInt}
+import scala.concurrent.{Await, Future}
 import scala.util.*
 
 object Bootstrap {
@@ -32,6 +33,24 @@ object Bootstrap {
     val grpcService: HttpRequest => Future[HttpResponse] =
       ResourceServiceHandler.withServerReflection(new ResourceServiceImpl(userRequest))
 
+    // Looks up the replicator that is being used by [[akka.cluster.sharding.DDataShardCoordinator]]
+    val dDataShardReplicatorPath =
+      RootActorPath(system.deadLetters.path.address) / "system" / "sharding" / "replicator"
+
+    val f =
+      system.toClassic
+        .actorSelection(dDataShardReplicatorPath)
+        .resolveOne(7.seconds)
+        .map { dDataShardReplicator =>
+          akka.cluster.shardingUtils
+            .shardingStateChangesTracker(
+              dDataShardReplicator,
+              akka.cluster.Cluster(system).selfMember.address.host.getOrElse("local")
+            )
+        }(system.executionContext)
+
+    val shardingStateChangesTrackerKs = Await.result(f, 10.seconds) //
+
     Http(system)
       .newServerAt(bindHost, port)
       .bind(grpcService)
@@ -42,6 +61,7 @@ object Bootstrap {
         case Success(binding) =>
           system.log.info("★ ★ ★ ★ ★ ★ ★ ★ ★ ActorSystem({}) tree ★ ★ ★ ★ ★ ★ ★ ★ ★", system.name)
           system.log.info(system.printTree)
+
           shutdown.addTask(PhaseBeforeServiceUnbind, "before-unbind") { () =>
             Future.successful {
               system.log.info("★ ★ ★ CoordinatedShutdown [before-unbind] ★ ★ ★")
@@ -53,6 +73,8 @@ object Bootstrap {
           // no more requests are accepted and
           // all in-flight requests have been processed
           shutdown.addTask(PhaseServiceUnbind, "http-unbind") { () =>
+            shardingStateChangesTrackerKs.shutdown()
+
             // No new connections are accepted. Existing connections are still allowed to perform request/response cycles
             binding.unbind().map { done =>
               system.log.info("★ ★ ★ CoordinatedShutdown [http-api.unbind] ★ ★ ★")

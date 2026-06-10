@@ -90,9 +90,8 @@ object TakenUniqueResource {
         case resource.Assign(userId, resource, pendingCmdSeqNum, replyTo) =>
           val userResourceLinkRef = resolver.resolveActorRef(replyTo)
           ctx.log.info(s"★★★ Assign(${resource.uniqueKey}), user:$userId")
-          // Thread.sleep(800) // for local testing
-
-          /*if (scala.util.Random.nextDouble() < .6) {
+          // for testing
+          /*if (scala.util.Random.nextDouble() < .5) {
             Effect.none
               .thenRun { _: TakenResourceState => println("DROP Assign") }
               .thenNoReply()
@@ -100,14 +99,13 @@ object TakenUniqueResource {
 
           pbState.contentKeySeqNum.get(resource.uniqueKey) match {
             case Some(seqNum) =>
-
               /*
-
-              Effect.none
-                .thenRun { _: TakenResourceState =>
-                  ClusterSharding(ctx.system).entityRefFor(UserResourceLink.TypeKey, userId)
-                }
-                .thenNoReply()*/
+                Effect.none
+                  .thenRun { _: TakenResourceState =>
+                    ClusterSharding(ctx.system).entityRefFor(UserResourceLink.TypeKey, userId)
+                  }
+                  .thenNoReply()
+               */
 
               Effect.none
                 .thenReply(userResourceLinkRef) { _: TakenResourceState =>
