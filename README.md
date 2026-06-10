@@ -52,11 +52,15 @@ Client1 `Reassign(usr=2, from=x, to=y)` <> Client2 `Reassign(usr=2, from=x, to=z
 Operations that may break app level invariants when executed concurrently.
 
 
-## Requirements
- 
+### Design ideas and requirements
+
+✅ This system non-transactionally comes to a mutually agreeable series of state changes.
+
+✅ Read-Your-Writes.
+
 ✅ Application correctness.
 
-✅ Clients are able to provide a globally unique `userId`s.
+✅ Clients are able to order their own operations and provide a globally unique ID (user_id).
 
 It's a relative order invariant. Resource acquisition requires a `precondition check`.  Releasing resource doesn't require any checks and should succeed eventually. Causal ordering if enough to guarantee we never violate anything in this flow.
 
