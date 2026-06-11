@@ -64,12 +64,12 @@ object TakenUniqueResource {
         )
         .withRetention(RetentionCriteria.snapshotEvery(numberOfEvents = snapshotEveryNEvents, keepNSnapshots = 1))
         .receiveSignal {
-          case (state, RecoveryCompleted) =>
-            ctx.log.warn(s"★★★ RecoveryCompleted: - ${state.contentKeySeqNum.size}")
-          case (state, SnapshotCompleted(_)) =>
-            ctx.log.info(s"★★★ SnapshotCompleted: ${state.contentKeySeqNum.size}")
+          case (_, RecoveryCompleted) =>
+            ctx.log.warn("RecoveryCompleted")
+          case (_, SnapshotCompleted(_)) =>
+            ctx.log.info("SnapshotCompleted")
           case (state, SnapshotFailed(_, ex)) =>
-            ctx.log.error(s"★★★ Saving snapshot $state failed", ex)
+            ctx.log.error(s"Saving snapshot $state failed", ex)
           case (_, RecoveryFailed(cause)) =>
             ctx.log.error(s"There is a problem with state recovery $cause", cause)
         }
@@ -89,7 +89,7 @@ object TakenUniqueResource {
       cmd match {
         case resource.Assign(userId, resource, pendingCmdSeqNum, replyTo) =>
           val userResourceLinkRef = resolver.resolveActorRef(replyTo)
-          ctx.log.info(s"★★★ Assign(${resource.uniqueKey}), user:$userId")
+          ctx.log.info(s"Assign(${resource.uniqueKey}), user:$userId")
           // for testing
           /*if (scala.util.Random.nextDouble() < .5) {
             Effect.none
@@ -132,7 +132,7 @@ object TakenUniqueResource {
           }
 
         case resource.Release(userId, releasedResource, releasedLocation, pendingCmdSeqNum, replyTo) =>
-          ctx.log.info(s"★★★ Release(${releasedResource.uniqueKey}), user:$userId")
+          ctx.log.info(s"Release(${releasedResource.uniqueKey}) user:$userId")
           pbState.contentKeySeqNum.collectFirst {
             case (_, seqNum) if seqNum == releasedLocation.seqNum => seqNum
           } match {
@@ -147,7 +147,7 @@ object TakenUniqueResource {
                   )
                 )
                 .thenRun { _: TakenResourceState =>
-                  ctx.log.info(s"★★★ Got Release(${releasedResource.uniqueKey}), user:$userId")
+                  ctx.log.info(s"Got Release(${releasedResource.uniqueKey}), user:$userId")
                 }
                 .thenNoReply()
 
@@ -161,7 +161,7 @@ object TakenUniqueResource {
 
         case resource.Reassign(userId, resource, releasedLocation, pendingCmdSeqNum, replyTo) =>
           val userResourceLinkRef = resolver.resolveActorRef(replyTo)
-          ctx.log.info(s"★★★ Reassign(${resource.uniqueKey}), user:$userId")
+          ctx.log.info(s"Reassign(${resource.uniqueKey}), user:$userId")
           pbState.contentKeySeqNum.get(resource.uniqueKey) match {
             case Some(seqNum) =>
               Effect.none
