@@ -45,13 +45,13 @@ libraryDependencies ++= Seq(
   "com.lightbend.akka.management" %%  "akka-lease-kubernetes"             % AkkaManagementVersion,
   "com.lightbend.akka.discovery"  %%  "akka-discovery-kubernetes-api"     % AkkaManagementVersion,
 
-  "ch.qos.logback" % "logback-classic" % "1.5.34",
+  "ch.qos.logback" % "logback-classic" % "1.6.3",
   "org.slf4j"      % "slf4j-api"       %  "2.0.18",
 
   "io.aeron" % "aeron-driver" % "1.46.9", //1.47.0
   "io.aeron" % "aeron-client" % "1.46.9",
 
-  "org.wvlet.airframe" %% "airframe-ulid" % "2026.1.6",
+  "org.wvlet.airframe" %% "airframe-ulid" % "2026.2.2",
 
   "com.lightbend.akka" %% "akka-persistence-r2dbc" % AkkaPersistenceR2dbcVersion,
 
@@ -78,7 +78,7 @@ Compile / scalacOptions ++= Seq(
   "-Xsource:3",
   //"-Xsource:3-cross",
   s"-release:$releaseJvmVersion", // tells the Scala compiler to emit bytecode that is compatible with JDK N.
-  "-Wconf:msg=lambda-parens:s",
+  "-Wconf:msg=lambda-parens:s", //parentheses are required around the parameter of a lambda - to silence this warning
   "-Xlog-reflective-calls",
   "-Xlint",
   "-Vtype-diffs",
@@ -108,8 +108,10 @@ javaOptions ++= Seq(
   // To allow getting native memory stats for threads
   "-XX:NativeMemoryTracking=summary", // detail
 
-  "-XX:ActiveProcessorCount=6",
-  "-XX:+UseZGC",
+  "-XX:ActiveProcessorCount=8",
+  "-XX:+UseG1GC",      //with heaps >4GB
+  //"-XX:+UseParallelGC",  //with heaps < 4GB
+  //"-XX:+UseZGC",       //apps that require sub-millisecond GC pauses, with gigantic (terabyte range) heaps
   "--add-exports=java.base/sun.nio.ch=ALL-UNNAMED",
   "--add-opens=java.base/java.lang=ALL-UNNAMED",
   "--add-opens=java.base/java.lang.reflect=ALL-UNNAMED",
